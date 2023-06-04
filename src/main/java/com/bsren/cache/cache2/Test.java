@@ -1,5 +1,7 @@
 package com.bsren.cache.cache2;
 
+import com.google.common.cache.CacheLoader;
+
 public class Test {
 
     public static void main(String[] args) {
@@ -8,6 +10,5 @@ public class Test {
         ls.put(1,"fa");
         System.out.println(ls.get(2));
         System.out.println(ls.get(1));
-
     }
 }
