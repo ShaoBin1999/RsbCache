@@ -20,11 +20,11 @@ import static com.google.common.base.Preconditions.*;
  * 6.限制缓存数量
  * 7.remove
  */
-public class LocalCache<K,V> {
+public class LocalCache<K, V> {
 
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
-    final Segment<K,V>[] segments;
+    final Segment<K, V>[] segments;
 
     int segmentMask;
 
@@ -34,7 +34,7 @@ public class LocalCache<K,V> {
 
     static final int UNSET_INT = -1;
 
-    Weigher<K,V> weigher;
+    Weigher<K, V> weigher;
 
     long maxWeight;
 
@@ -43,11 +43,11 @@ public class LocalCache<K,V> {
     }
 
 
-    long getSize(){
-        Segment<K,V>[] segment = this.segments;
+    long getSize() {
+        Segment<K, V>[] segment = this.segments;
         long sum = 0;
         for (Segment<K, V> kvSegment : segment) {
-            sum+=kvSegment.count;
+            sum += kvSegment.count;
         }
         return sum;
     }
@@ -82,67 +82,65 @@ public class LocalCache<K,V> {
         }
     }
 
-    LocalCache(int initialCapacity,int segmentCount,int maxWeight){
+    LocalCache(int initialCapacity, int segmentCount, int maxWeight) {
         this.weigher = (Weigher<K, V>) OneWeigher.INSTANCE;
         this.ticker = Ticker.systemTicker();
         this.segments = newSegmentArray(segmentCount);
         this.maxWeight = maxWeight;
-        if(evictsBySize()){
-            initialCapacity = Math.min(initialCapacity,maxWeight);
+        if (evictsBySize()) {
+            initialCapacity = Math.min(initialCapacity, maxWeight);
         }
-        int segmentCapacity = initialCapacity/segmentCount;
-        if(segmentCapacity*segmentCount<initialCapacity){
+        int segmentCapacity = initialCapacity / segmentCount;
+        if (segmentCapacity * segmentCount < initialCapacity) {
             segmentCapacity++;
         }
-        segmentMask = segmentCount-1;
+        segmentMask = segmentCount - 1;
         int segmentSize = 1;
-        while (segmentSize<segmentCapacity){
-            segmentSize<<=1;
+        while (segmentSize < segmentCapacity) {
+            segmentSize <<= 1;
         }
-        if(evictsBySize()){
-            long maxSegmentWeight = maxWeight/segmentCount+1;
+        if (evictsBySize()) {
+            long maxSegmentWeight = maxWeight / segmentCount + 1;
             long remainder = maxWeight % segmentCount;
-            for (int i=0;i<this.segments.length;i++){
-                if(i==remainder){
+            for (int i = 0; i < this.segments.length; i++) {
+                if (i == remainder) {
                     maxSegmentWeight--;
                 }
-                this.segments[i] = createSegment(segmentSize,maxSegmentWeight);
+                this.segments[i] = createSegment(segmentSize, maxSegmentWeight);
             }
         }
-        for (int i=0;i<this.segments.length;i++){
-            segments[i] = createSegment(segmentSize,UNSET_INT);
+        for (int i = 0; i < this.segments.length; i++) {
+            segments[i] = createSegment(segmentSize, UNSET_INT);
         }
     }
 
-    Segment<K,V> createSegment(int initialCapacity,long maxSegmentWeight ) {
-        return new Segment<>(this,initialCapacity,maxSegmentWeight);
+    Segment<K, V> createSegment(int initialCapacity, long maxSegmentWeight) {
+        return new Segment<>(this, initialCapacity, maxSegmentWeight);
     }
 
-    final Segment<K,V>[] newSegmentArray(int size){
+    final Segment<K, V>[] newSegmentArray(int size) {
         return new Segment[size];
     }
 
-    public V get(Object key){
-        if(key==null){
+    public V get(Object key) {
+        if (key == null) {
             return null;
         }
         int hash = hash(key);
-        return segmentFor(hash).get(key,hash);
+        return segmentFor(hash).get(key, hash);
     }
 
-    public V put(K key,V value){
+    public V put(K key, V value) {
         int hash = hash(key);
-        return segmentFor(hash).put(key,hash,value);
+        return segmentFor(hash).put(key, hash, value);
     }
 
 
-
-
-    Segment<K,V> segmentFor(int hash){
+    Segment<K, V> segmentFor(int hash) {
         return segments[hash & segmentMask];
     }
 
-    int hash(Object key){
+    int hash(Object key) {
         int h = key.hashCode();
         return rehash(h);
     }
@@ -156,26 +154,26 @@ public class LocalCache<K,V> {
         return h ^ (h >>> 16);
     }
 
-    public V remove(Object key){
-        if(key==null){
+    public V remove(Object key) {
+        if (key == null) {
             return null;
         }
         int hash = hash(key);
-        return segmentFor(hash).remove(key,hash);
+        return segmentFor(hash).remove(key, hash);
     }
 
-    public boolean remove(Object key,Object value){
-        if(key==null || value==null){
+    public boolean remove(Object key, Object value) {
+        if (key == null || value == null) {
             return false;
         }
         int hash = hash(key);
-        return segmentFor(hash).remove(key,hash,value);
+        return segmentFor(hash).remove(key, hash, value);
     }
 
 
-    static class Segment<K,V> extends ReentrantLock {
+    static class Segment<K, V> extends ReentrantLock {
 
-        final LocalCache<K,V> map;
+        final LocalCache<K, V> map;
 
         volatile Object[] table;
 
@@ -183,13 +181,13 @@ public class LocalCache<K,V> {
 
         volatile int count;
 
-        Queue<Entry<K,V>> recencyQueue;
+        Queue<Entry<K, V>> recencyQueue;
 
         AtomicInteger readCount = new AtomicInteger();
 
         Queue<Entry<K, V>> accessQueue;
 
-        Queue<Entry<K,V>> writeQueue;
+        Queue<Entry<K, V>> writeQueue;
 
         long maxSegmentWeight;
 
@@ -197,9 +195,9 @@ public class LocalCache<K,V> {
 
         int modCount;
 
-        Segment(LocalCache<K,V> map,
+        Segment(LocalCache<K, V> map,
                 int initialCapacity,
-                long maxSegmentWeight){
+                long maxSegmentWeight) {
             this.map = map;
             this.maxSegmentWeight = maxSegmentWeight;
             initTable(newEntryArray(initialCapacity));
@@ -209,38 +207,38 @@ public class LocalCache<K,V> {
         }
 
         private void initTable(Object[] newEntryArray) {
-            this.threshold = newEntryArray.length*3/4;
+            this.threshold = newEntryArray.length * 3 / 4;
             this.table = newEntryArray;
         }
 
-        Entry<K,V>[] newEntryArray(int size){
+        Entry<K, V>[] newEntryArray(int size) {
             return new Entry[size];
         }
 
 
-        V get(Object key,int hash){
+        V get(Object key, int hash) {
             try {
-                if(count!=0){
+                if (count != 0) {
                     long now = map.ticker.read();
-                    Entry<K,V> e = getLiveEntry(key,hash,now);
-                    if(e == null){
+                    Entry<K, V> e = getLiveEntry(key, hash, now);
+                    if (e == null) {
                         return null;
                     }
-                    Value<K,V> value = e.getValue();
-                    if(value!=null){
-                        recordRead(e,now);
+                    Value<K, V> value = e.getValue();
+                    if (value != null) {
+                        recordRead(e, now);
                         return value.get();
                     }
 //                    tryDrainReferenceQueues();
                 }
                 return null;
-            }finally {
+            } finally {
                 postReadCleanup();
             }
         }
 
         private void postReadCleanup() {
-            if((readCount.incrementAndGet() & map.DRAIN_THRESHOLD)==0){
+            if ((readCount.incrementAndGet() & map.DRAIN_THRESHOLD) == 0) {
                 cleanUp();
             }
         }
@@ -251,12 +249,12 @@ public class LocalCache<K,V> {
         }
 
         private void runCleanup(long now) {
-            if(tryLock()){
+            if (tryLock()) {
                 try {
 //                    drainReferenceQueues();
                     expireEntries(now);
                     readCount.set(0);
-                }finally {
+                } finally {
                     unlock();
                 }
             }
@@ -264,27 +262,29 @@ public class LocalCache<K,V> {
 
         private void expireEntries(long now) {
             drainRecencyQueue();
-            Entry<K,V> e;
-            while ((e = writeQueue.peek())!=null && map.isExpired(e,now)){
-                if(!removeEntry(e,e.getHash(), RemovalCause.EXPIRED)){
+            Entry<K, V> e;
+            while ((e = writeQueue.peek()) != null && map.isExpired(e, now)) {
+                if (!removeEntry(e, e.getHash(), RemovalCause.EXPIRED)) {
                     break;
-                };
+                }
+                ;
             }
-            while ((e = accessQueue.peek())!=null && map.isExpired(e,now)){
-                if(!removeEntry(e,e.getHash(),RemovalCause.EXPIRED)){
+            while ((e = accessQueue.peek()) != null && map.isExpired(e, now)) {
+                if (!removeEntry(e, e.getHash(), RemovalCause.EXPIRED)) {
                     break;
-                };
+                }
+                ;
             }
         }
 
-        private boolean removeEntry(Entry<K,V> entry, int hash,RemovalCause cause) {
+        private boolean removeEntry(Entry<K, V> entry, int hash, RemovalCause cause) {
             int newCount = this.count - 1;
-            Entry<K,V>[] table = (Entry<K, V>[]) this.table;
-            int index = hash & (table.length-1);
-            Entry<K,V> first = table[index];
-            for (Entry<K,V> e = first; e!=null; e = e.getNext()){
-                if(e.getKey()==entry.getKey()){
-                    Entry<K,V> newFirst = removeValueFromChain(
+            Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+            int index = hash & (table.length - 1);
+            Entry<K, V> first = table[index];
+            for (Entry<K, V> e = first; e != null; e = e.getNext()) {
+                if (e.getKey() == entry.getKey()) {
+                    Entry<K, V> newFirst = removeValueFromChain(
                             first,
                             e,
                             e.getKey(),
@@ -293,7 +293,7 @@ public class LocalCache<K,V> {
                             e.getValue(),
                             cause
                     );
-                    newCount = this.count-1;
+                    newCount = this.count - 1;
                     table[index] = newFirst;
                     this.count = newCount;
                     return true;
@@ -302,25 +302,25 @@ public class LocalCache<K,V> {
             return false;
         }
 
-        private Entry<K,V> removeValueFromChain(
-                Entry<K,V> first,
-                Entry<K,V> entry,
+        private Entry<K, V> removeValueFromChain(
+                Entry<K, V> first,
+                Entry<K, V> entry,
                 K key,
                 int hash,
                 V v,
-                Value<K,V> value,
+                Value<K, V> value,
                 RemovalCause removalCause
         ) {
             writeQueue.remove(entry);
             accessQueue.remove(entry);
-            return removeEntryFromChain(first,entry);
+            return removeEntryFromChain(first, entry);
         }
 
-        private Entry<K,V> removeEntryFromChain(Entry<K,V> first, Entry<K,V> entry) {
+        private Entry<K, V> removeEntryFromChain(Entry<K, V> first, Entry<K, V> entry) {
             int newCount = count;
-            Entry<K,V> newFirst = entry.getNext();
-            for (Entry<K,V> e = first; e!=entry; e=e.getNext()){
-                Entry<K,V> next = copyEntry(e,newFirst);
+            Entry<K, V> newFirst = entry.getNext();
+            for (Entry<K, V> e = first; e != entry; e = e.getNext()) {
+                Entry<K, V> next = copyEntry(e, newFirst);
                 newFirst = next;
                 //todo
             }
@@ -330,9 +330,9 @@ public class LocalCache<K,V> {
 
         //todo 非常不理解
         private void drainRecencyQueue() {
-            Entry<K,V> e;
-            while ((e = recencyQueue.poll())!=null){
-                if(accessQueue.contains(e)){
+            Entry<K, V> e;
+            while ((e = recencyQueue.poll()) != null) {
+                if (accessQueue.contains(e)) {
                     accessQueue.add(e);
                 }
             }
@@ -342,18 +342,18 @@ public class LocalCache<K,V> {
 
         }
 
-        private void recordRead(Entry<K,V> entry, long now) {
-            if(map.recordsAccess()){
+        private void recordRead(Entry<K, V> entry, long now) {
+            if (map.recordsAccess()) {
                 entry.setAccessTime(now);
             }
             recencyQueue.add(entry);
         }
 
-        private Entry<K,V> getLiveEntry(Object key, int hash, long now) {
+        private Entry<K, V> getLiveEntry(Object key, int hash, long now) {
             Entry<K, V> entry = getEntry(key, hash);
-            if(entry==null){
+            if (entry == null) {
                 return null;
-            }else if(map.isExpired(entry,now)){
+            } else if (map.isExpired(entry, now)) {
                 tryExpireEntries(now);
                 return null;
             }
@@ -361,10 +361,10 @@ public class LocalCache<K,V> {
         }
 
         private void tryExpireEntries(long now) {
-            if(tryLock()){
+            if (tryLock()) {
                 try {
                     expireEntries(now);
-                }finally {
+                } finally {
                     unlock();
                 }
             }
@@ -373,51 +373,51 @@ public class LocalCache<K,V> {
         /**
          * 根据key和hash到map中获取entry
          */
-        Entry<K,V> getEntry(Object key, int hash){
-            for (Entry<K,V> e = getFirst(hash); e!=null; e = e.getNext()){
-                if(e.getHash()!=hash){
+        Entry<K, V> getEntry(Object key, int hash) {
+            for (Entry<K, V> e = getFirst(hash); e != null; e = e.getNext()) {
+                if (e.getHash() != hash) {
                     continue;
                 }
                 K entryKey = e.getKey();
-                if(entryKey==null){
+                if (entryKey == null) {
                     continue;
                 }
-                if(key.equals(entryKey)){
+                if (key.equals(entryKey)) {
                     return e;
                 }
             }
             return null;
         }
 
-        Entry<K,V> getFirst(int hash){
+        Entry<K, V> getFirst(int hash) {
             Object[] table = this.table;
-            return (Entry<K, V>) table[hash & (table.length-1)];
+            return (Entry<K, V>) table[hash & (table.length - 1)];
         }
 
         public V put(K key, int hash, V value) {
             lock();
             try {
                 long now = map.ticker.read();
-                int newCount = this.count+1;
-                if(newCount>this.threshold){
+                int newCount = this.count + 1;
+                if (newCount > this.threshold) {
                     expand();
-                    newCount = this.count+1;
+                    newCount = this.count + 1;
                 }
 
 
-                Entry<K,V>[] table = (Entry<K, V>[]) this.table;
-                int index = hash & (table.length-1);
-                Entry<K,V> first = table[index];
-                for (Entry<K,V> e = first; e!=null; e = e.getNext()){
+                Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+                int index = hash & (table.length - 1);
+                Entry<K, V> first = table[index];
+                for (Entry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
                     //find an existing value
-                    if(e.getHash() == hash && entryKey!=null && entryKey.equals(key)){
+                    if (e.getHash() == hash && entryKey != null && entryKey.equals(key)) {
                         Value<K, V> preValue = e.getValue();
                         V v = preValue.get();
                         e.setValue(new StrongValue<>(value));
                         e.setAccessTime(now);
                         e.setAccessTime(now);
-                        totalWeight += this .map.weigher.weigh(key,value);
+                        totalWeight += this.map.weigher.weigh(key, value);
                         writeQueue.add(e);
                         accessQueue.add(e);
                         return v;
@@ -433,36 +433,36 @@ public class LocalCache<K,V> {
                 this.count = newCount;
                 evictEntries(newEntry);
                 return null;
-            }finally {
+            } finally {
                 unlock();
                 postWriteCleanup();
             }
         }
 
-        private void evictEntries(Entry<K,V> newEntry) {
-            if(!map.evictsBySize()){
+        private void evictEntries(Entry<K, V> newEntry) {
+            if (!map.evictsBySize()) {
                 return;
             }
             drainRecencyQueue();
-            if(newEntry.getValue().getWeight()>maxSegmentWeight){
-                if(!removeEntry(newEntry,newEntry.getHash(),
-                        RemovalCause.SIZE)){
+            if (newEntry.getValue().getWeight() > maxSegmentWeight) {
+                if (!removeEntry(newEntry, newEntry.getHash(),
+                        RemovalCause.SIZE)) {
                     throw new AssertionError();
                 }
             }
-            while (totalWeight>maxSegmentWeight){
-                Entry<K,V> e = getNextEvictable();
-                if(!removeEntry(e,e.getHash(),RemovalCause.SIZE)){
+            while (totalWeight > maxSegmentWeight) {
+                Entry<K, V> e = getNextEvictable();
+                if (!removeEntry(e, e.getHash(), RemovalCause.SIZE)) {
                     throw new AssertionError();
                 }
             }
 
         }
 
-        Entry<K,V> getNextEvictable(){
+        Entry<K, V> getNextEvictable() {
             for (Entry<K, V> e : accessQueue) {
                 int weight = e.getValue().getWeight();
-                if(weight>0){
+                if (weight > 0) {
                     return e;
                 }
             }
@@ -473,44 +473,44 @@ public class LocalCache<K,V> {
 
         }
 
-        Entry<K,V> newEntry(K key, int hash, Entry<K,V> next){
-            return new StrongEntry<>(key,hash,next);
+        Entry<K, V> newEntry(K key, int hash, Entry<K, V> next) {
+            return new StrongEntry<>(key, hash, next);
         }
 
-        void expand(){
+        void expand() {
             Object[] oldTable = table;
             int oldCapacity = oldTable.length;
-            if(oldCapacity>=MAXIMUM_CAPACITY){
+            if (oldCapacity >= MAXIMUM_CAPACITY) {
                 return;
             }
             int newCount = count;
             Object[] newTable = newEntryArray(oldCapacity << 1);
-            threshold = newTable.length * 3/4;
-            int newMask = newTable.length-1;
-            for (int oldIndex = 0;oldIndex<oldCapacity;++oldIndex){
-                Entry<K,V> head = (Entry<K,V>)oldTable[oldIndex];
-                if(head!=null){
+            threshold = newTable.length * 3 / 4;
+            int newMask = newTable.length - 1;
+            for (int oldIndex = 0; oldIndex < oldCapacity; ++oldIndex) {
+                Entry<K, V> head = (Entry<K, V>) oldTable[oldIndex];
+                if (head != null) {
                     Entry<K, V> next = head.getNext();
                     int headIndex = head.getHash() & newMask;
-                    if(next==null){
+                    if (next == null) {
                         newTable[headIndex] = head;
-                    }else {
+                    } else {
                         //这里的想法是可能会有一串子在扩容后相同的index，挂在链的尾部
                         //算是一个小小的优化吧，感觉不是很明显
-                        Entry<K,V> tail = head;
+                        Entry<K, V> tail = head;
                         int tailIndex = headIndex;
-                        for (Entry<K,V> e = next; e!=null; e = e.getNext()){
+                        for (Entry<K, V> e = next; e != null; e = e.getNext()) {
                             int newIndex = e.getHash() & newMask;
-                            if(newIndex!=tailIndex){
+                            if (newIndex != tailIndex) {
                                 tailIndex = newIndex;
                                 tail = e;
                             }
                         }
                         newTable[tailIndex] = tail;
-                        for (Entry<K,V> e = head; e!=tail; e = e.getNext()){
+                        for (Entry<K, V> e = head; e != tail; e = e.getNext()) {
                             int newIndex = e.getHash() & newMask;
-                            Entry<K,V> newNext = (Entry<K, V>) newTable[newIndex];
-                            Entry<K,V> newFirst = copyEntry(e,newNext);
+                            Entry<K, V> newNext = (Entry<K, V>) newTable[newIndex];
+                            Entry<K, V> newFirst = copyEntry(e, newNext);
                             newTable[newIndex] = newFirst;
                         }
                     }
@@ -520,8 +520,8 @@ public class LocalCache<K,V> {
             this.count = newCount;
         }
 
-        private Entry<K,V> copyEntry(Entry<K,V> original, Entry<K,V> newNext) {
-            Entry<K,V> newEntry = new StrongEntry<>(original.getKey(),original.getHash(),newNext);
+        private Entry<K, V> copyEntry(Entry<K, V> original, Entry<K, V> newNext) {
+            Entry<K, V> newEntry = new StrongEntry<>(original.getKey(), original.getHash(), newNext);
             newEntry.setValue(original.getValue());
             return newEntry;
         }
@@ -531,26 +531,26 @@ public class LocalCache<K,V> {
             try {
                 long now = map.ticker.read();
                 preWriteCleanup(now);
-                int newCount = this.count-1;
-                Entry<K,V>[] table = (Entry<K, V>[]) this.table;
-                int index = hash & (table.length-1);
-                Entry<K,V> first = table[index];
-                for (Entry<K,V> e = first;e!=null;e = e.getNext()){
+                int newCount = this.count - 1;
+                Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+                int index = hash & (table.length - 1);
+                Entry<K, V> first = table[index];
+                for (Entry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
                     if (e.getHash() == hash
-                            && key.equals(entryKey)){
+                            && key.equals(entryKey)) {
                         Value<K, V> value = e.getValue();
                         V entryValue = value.get();
                         RemovalCause removalCause;
-                        if(entryValue!=null){
+                        if (entryValue != null) {
                             removalCause = RemovalCause.EXPLICIT;
-                        }else{
+                        } else {
                             return null;
                         }
                         modCount++;
-                        Entry<K,V> newFirst = removeValueFromChain(first,e,entryKey,hash,
-                               entryValue,value,removalCause);
-                        newCount = this.count-1;
+                        Entry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash,
+                                entryValue, value, removalCause);
+                        newCount = this.count - 1;
                         table[index] = newFirst;
                         this.count = newCount;
                         return entryValue;
@@ -558,34 +558,81 @@ public class LocalCache<K,V> {
                 }
                 return null;
 
-            }finally {
+            } finally {
                 unlock();
             }
         }
 
-        boolean remove(Object key, int hash, Object value){
+        boolean remove(Object key, int hash, Object value) {
             lock();
             try {
                 long now = map.ticker.read();
                 preWriteCleanup(now);
-                int newCount = this.count-1;
-                Entry<K,V>[] table = (Entry<K, V>[]) this.table;
-                int index = hash & (table.length-1);
-                Entry<K,V> first = table[index];
-                for (Entry<K,V> e = first; e!=null; e = e.getNext()){
+                int newCount = this.count - 1;
+                Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+                int index = hash & (table.length - 1);
+                Entry<K, V> first = table[index];
+                for (Entry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
-                    if(e.getHash() == hash
-                    && entryKey!=null
-                    && key.equals(entryKey)){
+                    if (e.getHash() == hash
+                            && entryKey != null
+                            && key.equals(entryKey)) {
                         Value<K, V> eValue = e.getValue();
                         V v = eValue.get();
                         RemovalCause cause = RemovalCause.EXPLICIT;
                         ++modCount;
                         Entry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash, v, eValue, cause);
-                        newCount = this.count-1;
+                        newCount = this.count - 1;
                         table[index] = newFirst;
                         this.count = newCount;
-                        return cause==RemovalCause.EXPLICIT;
+                        return cause == RemovalCause.EXPLICIT;
+                    }
+                }
+                return false;
+            } finally {
+                unlock();
+                postWriteCleanup();
+            }
+        }
+
+        boolean replace(K key, int hash, V oldValue, V newValue) {
+            lock();
+            try {
+                long now = map.ticker.read();
+                preWriteCleanup(now);
+                Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+                int index = hash & (table.length - 1);
+                Entry<K, V> first = table[index];
+                for (Entry<K, V> e = first; e != null; e = e.getNext()) {
+                    K entryKey = e.getKey();
+                    if(keyEqual(e,hash,entryKey,key)){
+                        Value<K,V> value = e.getValue();
+                        V v = value.get();
+                        if(v==null){  //丢掉，丢掉，一定要丢掉
+                            int newCount = this.count-1;
+                            modCount++;
+                            Entry<K, V> newFirst = removeValueFromChain(
+                                    first,
+                                    e,
+                                    entryKey,
+                                    hash,
+                                    v,
+                                    value,
+                                    RemovalCause.COLLECTED
+                            );
+                            newCount = this.count-1;
+                            table[index] = newFirst;
+                            this.count = newCount;
+                            return false;
+                        }
+                        if(oldValue.equals(entryKey)){  //todo
+                            modCount++;
+                            setValue(e,key,newValue,now);
+                            evictEntries(e);
+                            return true;
+                        }else {
+                            return false;
+                        }
                     }
                 }
                 return false;
@@ -595,29 +642,38 @@ public class LocalCache<K,V> {
             }
         }
 
+        private void setValue(Entry<K,V> e, K key, V newValue, long now) {
+        }
+
+        private boolean keyEqual(Entry<K,V> e, int hash, K entryKey, K key) {
+            return true;
+        }
+
+
         private void preWriteCleanup(long now) {
 
         }
 
-        void clear(){
-            if(count==0){
+        void clear() {
+            if (count == 0) {
                 return;
             }
             lock();
             try {
                 long now = map.ticker.read();
                 preWriteCleanup(now);
-                Entry<K,V>[] table = (Entry<K, V>[]) this.table;
-                for (int i=0;i<table.length;i++){
+                Entry<K, V>[] table = (Entry<K, V>[]) this.table;
+                for (int i = 0; i < table.length; i++) {
                     table[i] = null;
                 }
 
-                writeQueue.clear();;
+                writeQueue.clear();
+                ;
                 accessQueue.clear();
                 readCount.set(0);
                 ++modCount;
-                count=0;
-            }finally {
+                count = 0;
+            } finally {
                 unlock();
                 postWriteCleanup();
             }
@@ -630,10 +686,10 @@ public class LocalCache<K,V> {
 
     private boolean isExpired(Entry<K, V> entry, long now) {
         checkNotNull(entry);
-        if(expiresAfterAccess() && (now - entry.getAccessTime())>expireAfterAccessNanos){
+        if (expiresAfterAccess() && (now - entry.getAccessTime()) > expireAfterAccessNanos) {
             return true;
         }
-        if(expiresAfterWrite() && (now - entry.getWriteTime()>expireAfterWriteNanos)){
+        if (expiresAfterWrite() && (now - entry.getWriteTime() > expireAfterWriteNanos)) {
             return true;
         }
         return false;

@@ -10,6 +10,13 @@ public enum RemovalCause {
         }
     },
 
+    COLLECTED {
+        @Override
+        boolean wasEvicted() {
+            return true;
+        }
+    },
+
 
     EXPIRED {
         @Override
