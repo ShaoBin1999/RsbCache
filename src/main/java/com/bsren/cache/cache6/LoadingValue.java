@@ -5,6 +5,9 @@ import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
+
+import java.lang.ref.ReferenceQueue;
+
 import static com.google.common.util.concurrent.Futures.transform;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -82,4 +85,4 @@ public class LoadingValue <K,V> implements Value<K,V>{
     private boolean set(V newValue) {
         return futureValue.set(newValue);
     }
-}
+

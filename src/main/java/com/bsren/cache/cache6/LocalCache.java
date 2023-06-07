@@ -1,6 +1,7 @@
 package com.bsren.cache.cache6;
 
 
+import com.bsren.cache.abstractCache.AbstractCache;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -12,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 
 /**
@@ -27,7 +29,7 @@ public class LocalCache<K, V> {
 
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
-    final Segment<K, V>[] segments;
+    public final Segment<K, V>[] segments;
 
     int segmentMask;
 
@@ -47,8 +49,10 @@ public class LocalCache<K, V> {
         return maxWeight >= 0;
     }
 
+    public AbstractCache.StatsCounter globalStatsCounter;
 
-    long getSize() {
+
+    public long getSize() {
         Segment<K, V>[] segment = this.segments;
         long sum = 0;
         for (Segment<K, V> kvSegment : segment) {
@@ -76,6 +80,12 @@ public class LocalCache<K, V> {
     }
 
     Ticker ticker;
+
+    public void cleanUp() {
+        for (Segment<?, ?> segment : segments) {
+            segment.cleanUp();
+        }
+    }
 
 
     enum OneWeigher implements Weigher<Object, Object> {
@@ -136,6 +146,11 @@ public class LocalCache<K, V> {
         return segmentFor(hash).get(key, hash);
     }
 
+    public V get(K key,CacheLoader<K,V> loader) throws ExecutionException{
+        int hash = hash(checkNotNull(key));
+        return segmentFor(hash).get(key,hash,loader);
+    }
+
     public V put(K key, V value) {
         int hash = hash(key);
         return segmentFor(hash).put(key, hash, value);
@@ -177,9 +192,10 @@ public class LocalCache<K, V> {
     }
 
 
-    static class Segment<K, V> extends ReentrantLock {
+    public static class Segment<K, V> extends ReentrantLock {
 
         final LocalCache<K, V> map;
+        public AbstractCache.StatsCounter statsCounter;
 
         volatile Object[] table;
 
@@ -256,14 +272,36 @@ public class LocalCache<K, V> {
                             recordRead(e,now);
                             return scheduleRefresh(e,key,hash,value,now,loader);
                         }
+                        Value<K, V> valueReference = e.getValue();
+                        if(valueReference.isLoading()){
+                            return waitForLoadingValue(e,key,valueReference);
+                        }
                     }
-
-
                 }
+                return lockedGetOrLoad(key,hash,loader);
             }catch (Exception e){
 
             }
             return null;
+        }
+
+        private V waitForLoadingValue(Entry<K,V> e, K key, Value<K,V> valueReference) throws ExecutionException{
+            if(!valueReference.isLoading()){
+                throw new AssertionError();
+            }
+            checkState(!Thread.holdsLock(e), "Recursive load of: %s", key);
+            try {
+                V value = valueReference.waitForValue();
+                if(value==null){
+                    throw new RuntimeException();
+                }
+                long now = map.ticker.read();
+                recordRead(e,now);
+                return value;
+            }finally {
+
+            }
+
         }
 
         private V scheduleRefresh(Entry<K,V> e, K key, int hash, V oldValue, long now, CacheLoader<K,V> loader) {
@@ -794,6 +832,22 @@ public class LocalCache<K, V> {
                 postWriteCleanup();
             }
         }
+
+        public boolean containsKey(Object key, int hash) {
+            try {
+                if(count==0){
+                    return false;
+                }
+                long now = map.ticker.read();
+                Entry<K, V> entry = getLiveEntry(key, hash, now);
+                if(entry!=null){
+                    return entry.getValue().get()!=null;
+                }
+                return false;
+            }finally {
+                postReadCleanup();
+            }
+        }
     }
 
     private boolean refresher() {
@@ -814,6 +868,20 @@ public class LocalCache<K, V> {
         }
         return false;
     }
+
+    void refresh(K key) {
+        int hash = hash(checkNotNull(key));
+        segmentFor(hash).refresh(key, hash, defaultLoader, false);
+    }
+
+    public boolean containsKey(Object key){
+        if(key==null){
+            return false;
+        }
+        int hash = hash(key);
+        return segmentFor(hash).containsKey(key,hash);
+    }
+
 
 
 }
