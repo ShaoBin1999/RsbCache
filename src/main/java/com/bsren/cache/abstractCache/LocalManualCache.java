@@ -31,6 +31,11 @@ public class LocalManualCache<K,V> implements Cache<K,V>, Serializable {
         );
     }
 
+    @Override
+    public V getIfPresent(Object key) {
+        return null;
+    }
+
     public void put(K key,V value){
         localCache.put(key,value);
     }

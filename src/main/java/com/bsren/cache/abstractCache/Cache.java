@@ -11,6 +11,8 @@ public interface Cache<K,V> {
 
     V get(K key, Callable<V> loader) throws ExecutionException;
 
+    V getIfPresent(Object key);
+
     void put(K key,V value);
 
     void invalidate(Object key);
