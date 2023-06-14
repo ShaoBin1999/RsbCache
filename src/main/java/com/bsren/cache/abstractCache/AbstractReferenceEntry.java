@@ -1,8 +1,5 @@
 package com.bsren.cache.abstractCache;
 
-import com.bsren.cache.newCache.ReferenceEntry;
-import com.bsren.cache.newCache.ValueReference;
-
 public abstract  class AbstractReferenceEntry<K, V> implements ReferenceEntry<K, V> {
     @Override
     public ValueReference<K, V> getValueReference() {

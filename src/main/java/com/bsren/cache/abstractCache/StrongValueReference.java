@@ -1,8 +1,5 @@
 package com.bsren.cache.abstractCache;
 
-import com.bsren.cache.newCache.ReferenceEntry;
-import com.bsren.cache.newCache.ValueReference;
-
 import java.lang.ref.ReferenceQueue;
 import java.util.Objects;
 
@@ -27,6 +24,11 @@ public class StrongValueReference<K,V> implements ValueReference<K,V> {
     @Override
     public ValueReference<K, V> copyFor(ReferenceQueue<V> queue, V value, ReferenceEntry<K, V> entry) {
         return null;
+    }
+
+    @Override
+    public boolean isLoading() {
+        return false;
     }
 
     @Override

@@ -1,4 +1,4 @@
-package com.bsren.cache.newCache;
+package com.bsren.cache.abstractCache;
 
 public interface ReferenceEntry<K,V> {
 

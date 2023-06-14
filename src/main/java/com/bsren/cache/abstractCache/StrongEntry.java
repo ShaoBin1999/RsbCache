@@ -1,8 +1,5 @@
 package com.bsren.cache.abstractCache;
 
-import com.bsren.cache.abstractCache.AbstractReferenceEntry;
-import com.bsren.cache.newCache.ReferenceEntry;
-import com.bsren.cache.newCache.ValueReference;
 
 import java.util.Objects;
 
