@@ -1,20 +1,21 @@
 package com.bsren.cache.newCache;
 
-public class StrongValue<K,V> implements Value<K,V> {
+import java.lang.ref.ReferenceQueue;
 
-    V value;
-
-    public StrongValue(V value) {
-        this.value = value;
-    }
+public class StrongValue<K,V> implements ValueReference<K,V> {
 
     @Override
     public V get() {
-        return value;
+        return null;
     }
 
     @Override
-    public Entry<K,V> getEntry() {
+    public ReferenceEntry<K, V> getEntry() {
+        return null;
+    }
+
+    @Override
+    public ValueReference<K, V> copyFor(ReferenceQueue<V> queue, V value, ReferenceEntry<K, V> entry) {
         return null;
     }
 }

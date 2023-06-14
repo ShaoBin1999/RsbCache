@@ -1,20 +1,15 @@
 package com.bsren.cache.newCache;
 
 
-import com.bsren.cache.abstractCache.AbstractCache;
-import com.bsren.cache.abstractCache.AbstractReferenceEntry;
-import com.bsren.cache.abstractCache.StrongEntry;
-import com.bsren.cache.abstractCache.StrongValueReference;
+import com.bsren.cache.abstractCache.*;
 import com.google.common.base.Ticker;
 
-import java.security.PublicKey;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.google.common.base.Preconditions.checkElementIndex;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 
@@ -71,6 +66,7 @@ public class LocalCache<K, V> {
     LocalCache(int initialCapacity, int segmentCount) {
         this.ticker = Ticker.systemTicker();
         this.segments = newSegmentArray(segmentCount);
+        this.globalStatsCounter = new AbstractCache.SimpleStatsCounter();
         int segmentCapacity = initialCapacity / segmentCount;
         if (segmentCapacity * segmentCount < initialCapacity) {
             segmentCapacity++;
@@ -174,6 +170,7 @@ public class LocalCache<K, V> {
             accessQueue = new LinkedList<>();
             writeQueue = new LinkedList<>();
             recencyQueue = new LinkedList<>();
+            this.statsCounter = new AbstractCache.SimpleStatsCounter();
         }
 
         private void initTable(AtomicReferenceArray<ReferenceEntry<K, V>> newEntryArray) {
@@ -235,7 +232,6 @@ public class LocalCache<K, V> {
                 if (!removeEntry(e, e.getHash())) {
                     throw new AssertionError();
                 }
-                ;
             }
             while ((e = accessQueue.peek()) != null && map.isExpired(e, now)) {
                 if (!removeEntry(e, e.getHash())) {
@@ -326,6 +322,28 @@ public class LocalCache<K, V> {
             return entry;
         }
 
+        V getLiveValue(ReferenceEntry<K,V> entry,long now){
+            if(entry.getKey()==null){
+                tryDrainReferenceQueues();
+                return null;
+            }
+            V value = entry.getValueReference().get();
+            if(value==null){
+                tryDrainReferenceQueues();
+                return null;
+            }
+            if(map.isExpired(entry,now)){
+                tryExpireEntries(now);
+                return null;
+            }
+            return value;
+        }
+
+
+        private void tryDrainReferenceQueues() {
+
+        }
+
         private void tryExpireEntries(long now) {
             if (tryLock()) {
                 try {
@@ -371,30 +389,23 @@ public class LocalCache<K, V> {
                 }
 
 
-                ReferenceEntry<K, V>[] table = (ReferenceEntry<K, V>[]) this.table;
-                int index = hash & (table.length - 1);
-                ReferenceEntry<K, V> first = table[index];
+                AtomicReferenceArray<ReferenceEntry<K,V>> table = this.table;
+                int index = hash & (table.length() - 1);
+                ReferenceEntry<K, V> first = table.get(index);
                 for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
                     //find an existing value
                     if (e.getHash() == hash && entryKey != null && entryKey.equals(key)) {
-                        Value<K, V> preValue = e.getValue();
-                        V v = preValue.get();
-                        e.setValue(new com.bsren.cache.cache3.StrongValue<>(value));
-                        e.setAccessTime(now);
-                        e.setAccessTime(now);
-                        writeQueue.add(e);
-                        accessQueue.add(e);
+                        V v = e.getValueReference().get();
+                        modCount++;
+                        setValue(e,key,value,now);
                         return v;
                     }
                 }
+                modCount++;
                 ReferenceEntry<K, V> newEntry = newEntry(key, hash, first);
-                newEntry.setValue(new StrongValue<>(value));
-                newEntry.setWriteTime(now);
-                newEntry.setAccessTime(now);
-                writeQueue.add(newEntry);
-                accessQueue.add(newEntry);
-                table[index] = newEntry;
+                setValue(newEntry,key,value,now);
+                table.set(index,newEntry);
                 this.count = newCount;
                 return null;
             } finally {
@@ -412,22 +423,22 @@ public class LocalCache<K, V> {
         }
 
         void expand() {
-            Object[] oldTable = table;
-            int oldCapacity = oldTable.length;
+            AtomicReferenceArray<ReferenceEntry<K,V>> oldTable = this.table;
+            int oldCapacity = oldTable.length();
             if (oldCapacity >= MAXIMUM_CAPACITY) {
                 return;
             }
             int newCount = count;
-            Object[] newTable = newEntryArray(oldCapacity << 1);
-            threshold = newTable.length * 3 / 4;
-            int newMask = newTable.length - 1;
+            AtomicReferenceArray<ReferenceEntry<K,V>> newTable = newEntryArray(oldCapacity << 1);
+            threshold = newTable.length() * 3 / 4;
+            int newMask = newTable.length() - 1;
             for (int oldIndex = 0; oldIndex < oldCapacity; ++oldIndex) {
-                ReferenceEntry<K, V> head = (ReferenceEntry<K, V>) oldTable[oldIndex];
+                ReferenceEntry<K, V> head = oldTable.get(oldIndex);
                 if (head != null) {
                     ReferenceEntry<K, V> next = head.getNext();
                     int headIndex = head.getHash() & newMask;
                     if (next == null) {
-                        newTable[headIndex] = head;
+                        newTable.set(headIndex,head);
                     } else {
                         //这里的想法是可能会有一串子在扩容后相同的index，挂在链的尾部
                         //算是一个小小的优化吧，感觉不是很明显
@@ -440,12 +451,12 @@ public class LocalCache<K, V> {
                                 tail = e;
                             }
                         }
-                        newTable[tailIndex] = tail;
+                        newTable.set(tailIndex,tail);
                         for (ReferenceEntry<K, V> e = head; e != tail; e = e.getNext()) {
                             int newIndex = e.getHash() & newMask;
-                            ReferenceEntry<K, V> newNext = (ReferenceEntry<K, V>) newTable[newIndex];
+                            ReferenceEntry<K, V> newNext =  newTable.get(newIndex);
                             ReferenceEntry<K, V> newFirst = copyEntry(e, newNext);
-                            newTable[newIndex] = newFirst;
+                            newTable.set(newIndex,newFirst);
                         }
                     }
                 }
@@ -474,17 +485,17 @@ public class LocalCache<K, V> {
                 ReferenceEntry<K, V> first = table.get(index);
                 for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
-                    if(equalsKey(key,entryKey)){
-                        ValueReference<K,V> valueReference = e.getValueReference();
+                    if (equalsKey(key, entryKey)) {
+                        ValueReference<K, V> valueReference = e.getValueReference();
                         V entryValue = valueReference.get();
-                        if(entryValue!=null){
+                        if (entryValue != null) {
                             modCount++;
                             ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash, entryValue, valueReference);
-                            newCount = this.count-1;
-                            table.set(index,newFirst);
+                            newCount = this.count - 1;
+                            table.set(index, newFirst);
                             this.count = newCount;
                             return entryValue;
-                        }else {
+                        } else {
                             return null;
                         }
                     }
@@ -498,7 +509,7 @@ public class LocalCache<K, V> {
 
 
         private boolean equalsKey(Object key, K entryKey) {
-            return true;
+            return key.equals(entryKey);
         }
 
         private void preWriteCleanup(long now) {
@@ -516,50 +527,82 @@ public class LocalCache<K, V> {
                 ReferenceEntry<K, V> first = table.get(index);
                 for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
-                    if(equalsKey(key,entryKey)){
+                    if (equalsKey(key, entryKey)) {
                         ValueReference<K, V> valueReference = e.getValueReference();
                         V entryValue = valueReference.get();
-                        if(entryValue==null){
+                        if (entryValue == null) {
                             int newCount = this.count - 1;
                             modCount++;
                             ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash, entryValue, valueReference);
-                            newCount = this.count-1;
-                            table.set(index,newFirst);
+                            newCount = this.count - 1;
+                            table.set(index, newFirst);
                             this.count = newCount;
                             return null;
-                        }
-
-                        else {
+                        } else {
                             modCount++;
-                            setValue(e,key,newValue,now);
-                            evictEntries(e);
+                            setValue(e, key, newValue, now);
                             return entryValue;
                         }
                     }
                 }
                 return null;
-            }finally {
+            } finally {
                 postWriteCleanup();
                 unlock();
             }
         }
 
-        private void setValue(ReferenceEntry<K,V> e, K key, V newValue, long now) {
-            ValueReference<K,V> valueReference = new StrongValueReference<>(newValue);
+        private void setValue(ReferenceEntry<K, V> e, K key, V newValue, long now) {
+            ValueReference<K, V> valueReference = new StrongValueReference<>(newValue);
             e.setValueReference(valueReference);
-            recordWrite(e,now);
+            recordWrite(e, now);
         }
 
-        private void recordWrite(ReferenceEntry<K,V> e, long now) {
+        private void recordWrite(ReferenceEntry<K, V> e, long now) {
             drainRecencyQueue();
-            if(map.recordsAccess()){
+            if (map.recordsAccess()) {
                 e.setAccessTime(now);
             }
-            if(map.recordsWrite()){
+            if (map.recordsWrite()) {
                 e.setWriteTime(now);
             }
             accessQueue.add(e);
             writeQueue.add(e);
+        }
+
+        public void clear() {
+            if (count == 0) {
+                return;
+            }
+            lock();
+            try {
+                long now = map.ticker.read();
+                preWriteCleanup(now);
+                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+                for (int i = 0; i < table.length(); i++) {
+                    for (ReferenceEntry<K, V> e = table.get(i); e != null; e = e.getNext()) {
+                        K key = e.getKey();
+                        V value = e.getValueReference().get();
+                        RemovalCause cause = (key == null || value == null) ? RemovalCause.COLLECTED : RemovalCause.EXPLICIT;
+                        enqueueNotification();
+                    }
+                }
+                for (int i = 0; i < table.length(); i++) {
+                    table.set(i, null);
+                }
+                writeQueue.clear();
+                accessQueue.clear();
+                readCount.set(0);
+                modCount++;
+                count = 0;
+            } finally {
+                unlock();
+                postWriteCleanup();
+            }
+        }
+
+        private void enqueueNotification() {
+
         }
     }
 
@@ -582,11 +625,81 @@ public class LocalCache<K, V> {
         return false;
     }
 
-    public V replace(K key, V value){
+    public V replace(K key, V value) {
         checkNotNull(key);
         checkNotNull(value);
         int hash = hash(key);
-        return segmentFor(hash).replace(key,hash,value);
+        return segmentFor(hash).replace(key, hash, value);
+    }
+
+    public void clear() {
+        for (Segment<K, V> segment : segments) {
+            segment.clear();
+        }
+    }
+
+    public boolean containsValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+        long now = ticker.read();
+        final Segment<K, V>[] segments = this.segments;
+        for (Segment<K, V> segment : segments) {
+            AtomicReferenceArray<ReferenceEntry<K, V>> table = segment.table;
+            for (int j = 0; j < table.length(); j++) {
+                for (ReferenceEntry<K, V> e = table.get(j); e != null; e = e.getNext()) {
+                    V v = segment.getLiveValue(e,now);
+                    if(v!=null && equalsValue(value,v)){
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    boolean equalsValue(Object v1,V v2){
+        return true;
+    }
+
+    /**
+     * double check
+     * @return
+     */
+    boolean isEmpty(){
+        long sum = 0;
+        Segment<K,V>[] segments = this.segments;
+        for (Segment<K, V> segment : segments) {
+            if (segment.count != 0) {
+                return false;
+            }
+            sum += segment.modCount;
+        }
+        if(sum!=0){
+            for (Segment<K, V> segment : segments) {
+                if (segment.count != 0) {
+                    return false;
+                }
+                sum -= segment.modCount;
+            }
+            return sum==0L;
+        }
+        return true;
+    }
+
+    public void cleanUp(){
+        for (Segment<K, V> segment : segments) {
+            segment.cleanUp();
+        }
+    }
+
+    public CacheStats stats(){
+        AbstractCache.SimpleStatsCounter counter = new AbstractCache.SimpleStatsCounter();
+        counter.incrementBy(this.globalStatsCounter);
+        for (Segment<K, V> segment : this.segments) {
+            counter.incrementBy(segment.statsCounter);
+        }
+        return counter.snapshot();
     }
 
 

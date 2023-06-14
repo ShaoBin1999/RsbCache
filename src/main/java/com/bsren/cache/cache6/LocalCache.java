@@ -285,6 +285,10 @@ public class LocalCache<K, V> {
             return null;
         }
 
+        private V lockedGetOrLoad(K key, int hash, CacheLoader<K, V> loader) {
+            return null;
+        }
+
         private V waitForLoadingValue(Entry<K,V> e, K key, Value<K,V> valueReference) throws ExecutionException{
             if(!valueReference.isLoading()){
                 throw new AssertionError();
@@ -871,8 +875,10 @@ public class LocalCache<K, V> {
 
     void refresh(K key) {
         int hash = hash(checkNotNull(key));
+        CacheLoader<K, V> defaultLoader = null;
         segmentFor(hash).refresh(key, hash, defaultLoader, false);
     }
+
 
     public boolean containsKey(Object key){
         if(key==null){

@@ -27,4 +27,9 @@ public class StrongValue<K,V> implements Value<K,V> {
     public boolean isLoading() {
         return false;
     }
+
+    @Override
+    public V waitForValue() {
+        return null;
+    }
 }

@@ -2,7 +2,6 @@ package com.bsren.cache.abstractCache;
 
 import com.bsren.cache.cache6.CacheLoader;
 import com.bsren.cache.cache6.LocalCache;
-import com.google.common.cache.CacheStats;
 
 import java.io.Serializable;
 import java.util.concurrent.Callable;

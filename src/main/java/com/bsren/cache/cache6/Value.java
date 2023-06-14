@@ -9,4 +9,6 @@ public interface Value<K,V> {
     int getWeight();
 
     boolean isLoading();
+
+    V waitForValue();
 }

@@ -4,6 +4,7 @@ import com.bsren.cache.newCache.ReferenceEntry;
 import com.bsren.cache.newCache.ValueReference;
 
 import java.lang.ref.ReferenceQueue;
+import java.util.Objects;
 
 public class StrongValueReference<K,V> implements ValueReference<K,V> {
 
@@ -26,5 +27,18 @@ public class StrongValueReference<K,V> implements ValueReference<K,V> {
     @Override
     public ValueReference<K, V> copyFor(ReferenceQueue<V> queue, V value, ReferenceEntry<K, V> entry) {
         return null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StrongValueReference<?, ?> that = (StrongValueReference<?, ?>) o;
+        return Objects.equals(referent, that.referent);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(referent);
     }
 }

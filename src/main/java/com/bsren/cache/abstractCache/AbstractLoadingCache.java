@@ -1,13 +1,30 @@
 package com.bsren.cache.abstractCache;
 
-public abstract class AbstractLoadingCache<K,V> extends AbstractCache<K,V>
-               implements LoadingCache<K,V>{
+import java.util.concurrent.ExecutionException;
 
-    protected AbstractLoadingCache() {}
-
-
-    @Override
-    public void refresh(K key) {
-        throw new UnsupportedOperationException();
-    }
-}
+//public abstract class AbstractLoadingCache<K,V> extends AbstractCache<K,V>
+//               implements LoadingCache<K,V>{
+//
+//    protected AbstractLoadingCache() {}
+//
+//
+//    @Override
+//    public V get(K key) throws ExecutionException {
+//        return null;
+//    }
+//
+//    @Override
+//    public void refresh(K key) {
+//        throw new UnsupportedOperationException();
+//    }
+//
+//    @Override
+//    public V getIfPresent(Object key) {
+//        return null;
+//    }
+//
+//    @Override
+//    public V apply(K input) {
+//        return null;
+//    }
+//}

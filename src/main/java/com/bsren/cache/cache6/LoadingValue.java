@@ -12,20 +12,20 @@ import static com.google.common.util.concurrent.Futures.transform;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 
-public class LoadingValue <K,V> implements Value<K,V>{
+public class LoadingValue <K,V> implements Value<K,V> {
 
 
-    Value<K,V> oldValue;
+    Value<K, V> oldValue;
 
     SettableFuture<V> futureValue = SettableFuture.create();
 
     Stopwatch stopwatch = Stopwatch.createUnstarted();
 
-    public LoadingValue(){
+    public LoadingValue() {
         this(null);
     }
 
-    public LoadingValue(Value<K,V> oldValue){
+    public LoadingValue(Value<K, V> oldValue) {
         this.oldValue = oldValue;
     }
 
@@ -49,25 +49,30 @@ public class LoadingValue <K,V> implements Value<K,V>{
         return true;
     }
 
+    @Override
+    public V waitForValue() {
+        return null;
+    }
+
     public ListenableFuture<V> loadFuture(K key, CacheLoader<K, V> loader) {
         try {
             stopwatch.start();
             V previousValue = oldValue.get();
-            if(previousValue==null){
+            if (previousValue == null) {
                 V newValue = loader.load(key);
-                return set(newValue)?futureValue: Futures.immediateFuture(newValue);
+                return set(newValue) ? futureValue : Futures.immediateFuture(newValue);
             }
             ListenableFuture<V> newValue = loader.reload(key, previousValue);
-            if(newValue==null){
+            if (newValue == null) {
                 return Futures.immediateFuture(null);
             }
             return transform(newValue, input -> {
                 LoadingValue.this.set(input);
                 return input;
-            },directExecutor());
-        }catch (Throwable t){
-            ListenableFuture<V> result = setException(t)?futureValue:fullyFailedFuture(t);
-            if(t instanceof InterruptedException){
+            }, directExecutor());
+        } catch (Throwable t) {
+            ListenableFuture<V> result = setException(t) ? futureValue : fullyFailedFuture(t);
+            if (t instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             return result;
@@ -85,4 +90,5 @@ public class LoadingValue <K,V> implements Value<K,V>{
     private boolean set(V newValue) {
         return futureValue.set(newValue);
     }
+}
 

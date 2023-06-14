@@ -1,6 +1,7 @@
 package com.bsren.cache.abstractCache;
 
-import com.google.common.cache.CacheStats;
+import com.bsren.cache.abstractCache.longadder.LongAddable;
+import com.bsren.cache.abstractCache.longadder.LongAddables;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
