@@ -2,6 +2,7 @@ package com.bsren.cache.abstractCache;
 
 import java.lang.ref.ReferenceQueue;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 public class StrongValueReference<K,V> implements ValueReference<K,V> {
 
@@ -29,6 +30,16 @@ public class StrongValueReference<K,V> implements ValueReference<K,V> {
     @Override
     public boolean isLoading() {
         return false;
+    }
+
+    @Override
+    public boolean isActive() {
+        return true;
+    }
+
+    @Override
+    public V waitForValue() throws ExecutionException {
+        return null;
     }
 
     @Override

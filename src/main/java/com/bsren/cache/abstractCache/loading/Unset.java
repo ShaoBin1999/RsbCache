@@ -5,6 +5,7 @@ import com.bsren.cache.abstractCache.ValueReference;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.ref.ReferenceQueue;
+import java.util.concurrent.ExecutionException;
 
 public class Unset {
     static final ValueReference<Object, Object> UNSET =
@@ -31,6 +32,16 @@ public class Unset {
                 @Override
                 public boolean isLoading() {
                     return false;
+                }
+
+                @Override
+                public boolean isActive() {
+                    return false;
+                }
+
+                @Override
+                public Object waitForValue() throws ExecutionException {
+                    return null;
                 }
 
             };

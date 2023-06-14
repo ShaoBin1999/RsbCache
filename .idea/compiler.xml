@@ -9,5 +9,8 @@
         <module name="RsbCache" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="myflink" target="1.8" />
+    </bytecodeTargetLevel>
   </component>
 </project>
