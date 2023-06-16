@@ -10,7 +10,6 @@ public abstract class AbstractCache<K,V> implements Cache<K,V> {
 
     protected AbstractCache() {}
 
-    @Override
     public V get(K key, Callable<V> valueLoader) throws ExecutionException {
         throw new UnsupportedOperationException();
     }

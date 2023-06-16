@@ -39,8 +39,13 @@ public class LoadingValueReference <K,V> implements ValueReference<K,V> {
 
     @Override
     public V get() {
-        return null;
+        return oldValue.get();
     }
+
+    public ValueReference<K, V> getOldValue() {
+        return oldValue;
+    }
+
 
     public boolean set(@Nullable V newValue) {
         return futureValue.set(newValue);
@@ -53,12 +58,12 @@ public class LoadingValueReference <K,V> implements ValueReference<K,V> {
 
     @Override
     public ValueReference<K, V> copyFor(ReferenceQueue<V> queue, V value, ReferenceEntry<K, V> entry) {
-        return null;
+        return this;
     }
 
     @Override
     public boolean isLoading() {
-        return false;
+        return true;
     }
 
     @Override
@@ -83,6 +88,8 @@ public class LoadingValueReference <K,V> implements ValueReference<K,V> {
             if(newValue==null){
                 return Futures.immediateFuture(null);
             }
+            // To avoid a race, make sure the refreshed value is set into loadingValueReference
+            // *before* returning newValue from the cache query.
             return transform(newValue, new Function<V, V>() {
                 @Override
                 public V apply(V newValue) {

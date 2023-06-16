@@ -45,5 +45,45 @@ public abstract  class AbstractReferenceEntry<K, V> implements ReferenceEntry<K,
     public void setWriteTime(long time) {
         throw new UnsupportedOperationException();
     }
+
+    @Override
+    public ReferenceEntry<K, V> getNextInAccessQueue() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setNextInAccessQueue(ReferenceEntry<K, V> next) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ReferenceEntry<K, V> getPreviousInAccessQueue() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setPreviousInAccessQueue(ReferenceEntry<K, V> previous) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ReferenceEntry<K, V> getNextInWriteQueue() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setNextInWriteQueue(ReferenceEntry<K, V> next) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ReferenceEntry<K, V> getPreviousInWriteQueue() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void setPreviousInWriteQueue(ReferenceEntry<K, V> previous) {
+        throw new UnsupportedOperationException();
+    }
 }
 
