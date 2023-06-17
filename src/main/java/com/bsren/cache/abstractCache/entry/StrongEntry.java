@@ -1,7 +1,13 @@
-package com.bsren.cache.abstractCache;
+package com.bsren.cache.abstractCache.entry;
 
+
+import com.bsren.cache.abstractCache.AbstractReferenceEntry;
+import com.bsren.cache.abstractCache.ReferenceEntry;
+import com.bsren.cache.abstractCache.ValueReference;
 
 import java.util.Objects;
+
+import static com.bsren.cache.abstractCache.loading.Unset.unset;
 
 public  class StrongEntry<K,V> extends AbstractReferenceEntry<K,V> {
 
@@ -11,7 +17,7 @@ public  class StrongEntry<K,V> extends AbstractReferenceEntry<K,V> {
 
     ReferenceEntry<K,V> next;
 
-    volatile ValueReference<K,V> value;
+    volatile ValueReference<K,V> valueReference = unset();
 
     volatile long accessTime = Long.MAX_VALUE;
 
@@ -25,12 +31,12 @@ public  class StrongEntry<K,V> extends AbstractReferenceEntry<K,V> {
 
     @Override
     public ValueReference<K, V> getValueReference() {
-        return value;
+        return valueReference;
     }
 
     @Override
     public void setValueReference(ValueReference<K, V> value) {
-        this.value = value;
+        this.valueReference = value;
     }
 
     @Override
@@ -79,6 +85,6 @@ public  class StrongEntry<K,V> extends AbstractReferenceEntry<K,V> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(key, hash, next, value, accessTime, writeTime);
+        return Objects.hash(key, hash, next, valueReference, accessTime, writeTime);
     }
 }

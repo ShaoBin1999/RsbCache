@@ -2,6 +2,7 @@ package com.bsren.cache.cache7;
 
 
 import com.bsren.cache.abstractCache.*;
+import com.bsren.cache.abstractCache.entry.StrongEntry;
 import com.bsren.cache.abstractCache.loading.Unset;
 import com.bsren.cache.abstractCache.queue.AccessQueue;
 import com.google.common.base.Ticker;
@@ -11,7 +12,6 @@ import com.google.errorprone.annotations.concurrent.GuardedBy;
 
 import java.util.AbstractQueue;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;

@@ -2,6 +2,7 @@ package com.bsren.cache.newCache;
 
 
 import com.bsren.cache.abstractCache.*;
+import com.bsren.cache.abstractCache.entry.StrongEntry;
 import com.google.common.base.Ticker;
 
 import java.util.LinkedList;
