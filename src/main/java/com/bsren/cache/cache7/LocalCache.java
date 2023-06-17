@@ -3,12 +3,17 @@ package com.bsren.cache.cache7;
 
 import com.bsren.cache.abstractCache.*;
 import com.bsren.cache.abstractCache.loading.Unset;
+import com.bsren.cache.abstractCache.queue.AccessQueue;
 import com.google.common.base.Ticker;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 
+import java.util.AbstractQueue;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -208,9 +213,12 @@ public class LocalCache<K, V> {
                 int initialCapacity) {
             this.map = map;
             initTable(newEntryArray(initialCapacity));
-            accessQueue = new LinkedList<>();
-            writeQueue = new LinkedList<>();
-            recencyQueue = new LinkedList<>();
+            accessQueue = map.useAccessQueue()?
+                    new ConcurrentLinkedQueue<>(): LocalCache.discardingQueue();
+
+            writeQueue = map.useWriteQueue()?
+                    new ConcurrentLinkedQueue<>():LocalCache.discardingQueue();
+            recencyQueue = map.useAccessQueue()?new AccessQueue<>():LocalCache.discardingQueue();
             this.statsCounter = new AbstractCache.SimpleStatsCounter();
         }
 
@@ -1031,6 +1039,14 @@ public class LocalCache<K, V> {
         }
     }
 
+    private boolean useAccessQueue() {
+        return expiresAfterAccess();
+    }
+
+    private boolean useWriteQueue(){
+        return expiresAfterWrite();
+    }
+
     private boolean recordsWrite() {
         return expiresAfterWrite();
     }
@@ -1129,4 +1145,37 @@ public class LocalCache<K, V> {
     }
 
     static final Logger logger = Logger.getLogger(LocalCache.class.getName());
+
+
+    static final Queue<?> DISCARDING_QUEUE =
+            new AbstractQueue<Object>() {
+                @Override
+                public boolean offer(Object o) {
+                    return true;
+                }
+
+                @Override
+                public Object peek() {
+                    return null;
+                }
+
+                @Override
+                public Object poll() {
+                    return null;
+                }
+
+                @Override
+                public int size() {
+                    return 0;
+                }
+
+                @Override
+                public Iterator<Object> iterator() {
+                    return ImmutableSet.of().iterator();
+                }
+            };
+
+    static <E> Queue<E> discardingQueue() {
+        return (Queue) DISCARDING_QUEUE;
+    }
 }

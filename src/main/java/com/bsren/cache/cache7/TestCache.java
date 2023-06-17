@@ -37,6 +37,12 @@ public class TestCache {
             }
         }));
         Thread.sleep(7000);
+        System.out.println(localCache.get(1, new CacheLoader<Integer, String>() {
+            @Override
+            public String load(Integer key) throws Exception {
+                return "3333"+key;
+            }
+        }));
         System.out.println(localCache.getIfPresent(1));
     }
 
