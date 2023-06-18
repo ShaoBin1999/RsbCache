@@ -1,7 +1,7 @@
 package com.bsren.cache;
 
 
-import com.bsren.cache.entry.StrongEntry;
+import com.bsren.cache.listeners.RemovalCause;
 import com.bsren.cache.loading.Unset;
 import com.bsren.cache.queue.AccessQueue;
 import com.google.common.base.Equivalence;
@@ -9,7 +9,6 @@ import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.ref.ReferenceQueue;
 import java.util.AbstractQueue;

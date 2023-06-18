@@ -1,4 +1,4 @@
-package com.bsren.cache;
+package com.bsren.cache.listeners;
 
 
 public enum RemovalCause {
@@ -8,7 +8,7 @@ public enum RemovalCause {
      */
     EXPLICIT {
         @Override
-        boolean wasEvicted() {
+        public boolean wasEvicted() {
             return false;
         }
     },
@@ -18,7 +18,7 @@ public enum RemovalCause {
      */
     REPLACED {
         @Override
-        boolean wasEvicted() {
+        public boolean wasEvicted() {
             return false;
         }
     },
@@ -28,7 +28,7 @@ public enum RemovalCause {
      */
     COLLECTED {
         @Override
-        boolean wasEvicted() {
+        public boolean wasEvicted() {
             return true;
         }
     },
@@ -38,7 +38,7 @@ public enum RemovalCause {
      */
     EXPIRED {
         @Override
-        boolean wasEvicted() {
+        public boolean wasEvicted() {
             return true;
         }
     },
@@ -49,7 +49,7 @@ public enum RemovalCause {
      */
     SIZE {
         @Override
-        boolean wasEvicted() {
+        public boolean wasEvicted() {
             return true;
         }
     };
@@ -58,5 +58,5 @@ public enum RemovalCause {
      * Returns {@code true} if there was an automatic removal due to eviction (the cause is neither
      * {@link #EXPLICIT} nor {@link #REPLACED}).
      */
-    abstract boolean wasEvicted();
+    public abstract boolean wasEvicted();
 }
