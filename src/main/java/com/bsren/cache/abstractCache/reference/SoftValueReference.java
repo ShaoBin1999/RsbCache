@@ -1,20 +1,19 @@
-package com.bsren.cache.cache5.valueReference;
+package com.bsren.cache.abstractCache.reference;
+
 
 import com.bsren.cache.cache5.ReferenceEntry;
 import com.bsren.cache.cache5.ValueReference;
 
 import java.lang.ref.ReferenceQueue;
+import java.lang.ref.SoftReference;
 
-public class StrongValueReference<K, V> implements ValueReference<K, V> {
-    final V referent;
+public class SoftValueReference<K, V> extends SoftReference<V> implements ValueReference<K, V> {
 
-    public StrongValueReference(V referent) {
-        this.referent = referent;
-    }
+    final ReferenceEntry<K, V> entry;
 
-    @Override
-    public V get() {
-        return referent;
+    public SoftValueReference(ReferenceQueue<V> queue, V referent, ReferenceEntry<K, V> entry) {
+        super(referent, queue);
+        this.entry = entry;
     }
 
     @Override
@@ -24,13 +23,16 @@ public class StrongValueReference<K, V> implements ValueReference<K, V> {
 
     @Override
     public ReferenceEntry<K, V> getEntry() {
-        return null;
+        return entry;
     }
+
+    @Override
+    public void notifyNewValue(V newValue) {}
 
     @Override
     public ValueReference<K, V> copyFor(
             ReferenceQueue<V> queue, V value, ReferenceEntry<K, V> entry) {
-        return this;
+        return new SoftValueReference<>(queue, value, entry);
     }
 
     @Override
@@ -47,7 +49,4 @@ public class StrongValueReference<K, V> implements ValueReference<K, V> {
     public V waitForValue() {
         return get();
     }
-
-    @Override
-    public void notifyNewValue(V newValue) {}
 }

@@ -1,25 +1,22 @@
-package com.bsren.cache.cache5.valueReference;
+package com.bsren.cache.reference;
 
-import com.bsren.cache.cache5.ReferenceEntry;
-import com.bsren.cache.cache5.ValueReference;
+
+
+import com.bsren.cache.ReferenceEntry;
+import com.bsren.cache.ValueReference;
 
 import java.lang.ref.ReferenceQueue;
 
 public class StrongValueReference<K, V> implements ValueReference<K, V> {
     final V referent;
 
-    public StrongValueReference(V referent) {
+    StrongValueReference(V referent) {
         this.referent = referent;
     }
 
     @Override
     public V get() {
         return referent;
-    }
-
-    @Override
-    public int getWeight() {
-        return 1;
     }
 
     @Override
@@ -47,7 +44,4 @@ public class StrongValueReference<K, V> implements ValueReference<K, V> {
     public V waitForValue() {
         return get();
     }
-
-    @Override
-    public void notifyNewValue(V newValue) {}
 }

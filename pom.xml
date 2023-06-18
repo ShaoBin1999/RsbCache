@@ -6,7 +6,11 @@
 
     <groupId>com.bsren</groupId>
     <artifactId>RsbCache</artifactId>
+    <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>cache1</module>
+    </modules>
     <dependencies>
         <dependency>
             <groupId>com.google.guava</groupId>

@@ -1,7 +1,7 @@
-package com.bsren.cache.abstractCache.loading;
+package com.bsren.cache.loading;
 
-import com.bsren.cache.abstractCache.ReferenceEntry;
-import com.bsren.cache.abstractCache.ValueReference;
+import com.bsren.cache.ReferenceEntry;
+import com.bsren.cache.ValueReference;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.ref.ReferenceQueue;
@@ -43,7 +43,7 @@ public class Unset {
                 public Object waitForValue() throws ExecutionException {
                     return null;
                 }
-                
+
             };
 
     public static <K, V> ValueReference<K, V> unset() {
