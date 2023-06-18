@@ -143,13 +143,13 @@ public final class WriteQueue<K, V> extends AbstractQueue<ReferenceEntry<K, V>> 
         };
     }
 
-    static <K, V> void connectWriteOrder(ReferenceEntry<K, V> previous, ReferenceEntry<K, V> next) {
+    public static <K, V> void connectWriteOrder(ReferenceEntry<K, V> previous, ReferenceEntry<K, V> next) {
         previous.setNextInWriteQueue(next);
         next.setPreviousInWriteQueue(previous);
     }
 
     // Guarded By Segment.this
-    static <K, V> void nullifyWriteOrder(ReferenceEntry<K, V> nulled) {
+    public static <K, V> void nullifyWriteOrder(ReferenceEntry<K, V> nulled) {
         ReferenceEntry<K, V> nullEntry = nullEntry();
         nulled.setNextInWriteQueue(nullEntry);
         nulled.setPreviousInWriteQueue(nullEntry);

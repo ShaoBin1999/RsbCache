@@ -133,12 +133,12 @@ public final class AccessQueue<K,V> extends AbstractQueue<ReferenceEntry<K,V>> {
         return next!= NullEntry.INSTANCE;
     }
 
-    static <K, V> void connectAccessOrder(ReferenceEntry<K, V> previous, ReferenceEntry<K, V> next) {
+    public static <K, V> void connectAccessOrder(ReferenceEntry<K, V> previous, ReferenceEntry<K, V> next) {
         previous.setNextInAccessQueue(next);
         next.setPreviousInAccessQueue(previous);
     }
 
-    static <K, V> void nullifyAccessOrder(ReferenceEntry<K, V> nulled) {
+    public static <K, V> void nullifyAccessOrder(ReferenceEntry<K, V> nulled) {
         ReferenceEntry<K, V> nullEntry = nullEntry();
         nulled.setNextInAccessQueue(nullEntry);
         nulled.setPreviousInAccessQueue(nullEntry);
