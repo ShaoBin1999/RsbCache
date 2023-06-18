@@ -57,6 +57,8 @@ public class LocalCache<K, V> {
     /** Strategy for comparing values. */
     Equivalence<Object> valueEquivalence;
 
+    int segmentShift;
+
     public LocalCache(CacheBuilder<K, V> builder, Object o) {
     }
 
@@ -113,6 +115,8 @@ public class LocalCache<K, V> {
         this(initialCapacity, segmentCount);
         this.defaultLoader = cacheLoader;
     }
+    
+    EntryFactory entryFactory;
 
     public LocalCache(
             CacheBuilder<? super K, ? super V> builder,
@@ -128,6 +132,51 @@ public class LocalCache<K, V> {
         refreshNanos = builder.getRefreshNanos();
 
         ticker = builder.getTicker(recordsTime());
+        entryFactory = EntryFactory.getFactory(keyStrength, usesAccessEntries(), usesWriteEntries());
+
+        int initialCapacity = builder.getInitialCapacity();
+        int segmentShift = 0;
+        int segmentCount = 1;
+        while ( segmentCount * 20 <= initialCapacity) {
+            ++segmentShift;
+            segmentCount <<= 1;
+        }
+        this.segmentShift = 32 - segmentShift;
+        segmentMask = segmentCount - 1;
+        this.segments = newSegmentArray(segmentCount);
+        this.globalStatsCounter = new AbstractCache.SimpleStatsCounter();
+        int segmentCapacity = initialCapacity / segmentCount;
+        if (segmentCapacity * segmentCount < initialCapacity) {
+            segmentCapacity++;
+        }
+        int segmentSize = 1;
+        while (segmentSize < segmentCapacity) {
+            segmentSize <<= 1;
+        }
+        for (int i = 0; i < this.segments.length; i++) {
+            segments[i] = createSegment(segmentSize);
+        }
+    }
+
+    boolean usesWriteQueue() {
+        return expiresAfterWrite();
+    }
+    
+    
+    private boolean usesWriteEntries() {
+        return usesWriteQueue() || recordsWrite();
+    }
+
+    private boolean usesAccessEntries() {
+        return usesAccessQueue() || recordsAccess();
+    }
+
+    boolean usesAccessQueue() {
+        return expiresAfterAccess() || evictsBySize();
+    }
+
+    boolean evictsBySize() {
+        return false;
     }
 
     public LocalCache(int initialCapacity, int segmentCount) {
@@ -206,7 +255,7 @@ public class LocalCache<K, V> {
 
 
     Segment<K, V> segmentFor(int hash) {
-        return segments[hash & segmentMask];
+        return segments[(hash >>> segmentShift) & segmentMask];
     }
 
     int hash(Object key) {
@@ -905,7 +954,7 @@ public class LocalCache<K, V> {
         }
 
         ReferenceEntry<K, V> newEntry(K key, int hash, ReferenceEntry<K, V> next) {
-            return new StrongEntry<>(key, hash, next);
+            return map.entryFactory.newEntry(this, checkNotNull(key), hash, next);
         }
 
         void expand() {
@@ -954,9 +1003,22 @@ public class LocalCache<K, V> {
         /**
          * 用强entry代替
          */
-        private ReferenceEntry<K, V> copyEntry(ReferenceEntry<K, V> original, ReferenceEntry<K, V> newNext) {
-            ReferenceEntry<K, V> newEntry = new StrongEntry<>(original.getKey(), original.getHash(), newNext);
-            newEntry.setValueReference(original.getValueReference());
+        @GuardedBy("this")
+        ReferenceEntry<K, V> copyEntry(ReferenceEntry<K, V> original, ReferenceEntry<K, V> newNext) {
+            if (original.getKey() == null) {
+                // key collected
+                return null;
+            }
+
+            ValueReference<K, V> valueReference = original.getValueReference();
+            V value = valueReference.get();
+            if ((value == null) && valueReference.isActive()) {
+                // value collected
+                return null;
+            }
+
+            ReferenceEntry<K, V> newEntry = map.entryFactory.copyEntry(this, original, newNext);
+            newEntry.setValueReference(valueReference.copyFor(this.valueReferenceQueue, value, newEntry));
             return newEntry;
         }
 
