@@ -56,12 +56,14 @@ public class LocalCache<K, V> {
 
     Equivalence<Object> keyEquivalence;
 
-    /** Strategy for comparing values. */
+    /**
+     * Strategy for comparing values.
+     */
     Equivalence<Object> valueEquivalence;
 
-    RemovalListener<K,V> removalListener;
+    RemovalListener<K, V> removalListener;
 
-    Queue<RemovalNotification<K,V>> removalNotificationQueue;
+    Queue<RemovalNotification<K, V>> removalNotificationQueue;
 
     int segmentShift;
 
@@ -111,19 +113,21 @@ public class LocalCache<K, V> {
 
     Strength keyStrength;
 
-    /** Strategy for referencing values. */
-   Strength valueStrength;
+    /**
+     * Strategy for referencing values.
+     */
+    Strength valueStrength;
 
     LocalCache(int initialCapacity, int segmentCount, CacheLoader<K, V> cacheLoader) {
         this(initialCapacity, segmentCount);
         this.defaultLoader = cacheLoader;
     }
-    
+
     EntryFactory entryFactory;
 
     public LocalCache(
             CacheBuilder<? super K, ? super V> builder,
-            CacheLoader<? super K, V> loader){
+            CacheLoader<? super K, V> loader) {
 
         keyStrength = builder.getKeyStrength();
         valueStrength = builder.getValueStrength();
@@ -140,13 +144,13 @@ public class LocalCache<K, V> {
         entryFactory = EntryFactory.getFactory(keyStrength, usesAccessEntries(), usesWriteEntries());
 
         removalListener = builder.getRemovalListener();
-        removalNotificationQueue = (removalListener== CacheBuilder.NullListener.INSTANCE)?
-                LocalCache.discardingQueue():new ConcurrentLinkedDeque<>();
+        removalNotificationQueue = (removalListener == CacheBuilder.NullListener.INSTANCE) ?
+                LocalCache.discardingQueue() : new ConcurrentLinkedDeque<>();
 
         int initialCapacity = builder.getInitialCapacity();
         int segmentShift = 0;
         int segmentCount = 1;
-        while ( segmentCount * 20 <= initialCapacity) {
+        while (segmentCount * 20 <= initialCapacity) {
             ++segmentShift;
             segmentCount <<= 1;
         }
@@ -170,8 +174,8 @@ public class LocalCache<K, V> {
     boolean usesWriteQueue() {
         return expiresAfterWrite();
     }
-    
-    
+
+
     private boolean usesWriteEntries() {
         return usesWriteQueue() || recordsWrite();
     }
@@ -244,14 +248,14 @@ public class LocalCache<K, V> {
 
     public V put(K key, V value) {
         int hash = hash(key);
-        return segmentFor(hash).put(key, hash, value,false);
+        return segmentFor(hash).put(key, hash, value, false);
     }
 
-    public V putIfAbsent(K key,V value){
+    public V putIfAbsent(K key, V value) {
         checkNotNull(key);
         checkNotNull(value);
         int hash = hash(key);
-        return segmentFor(hash).put(key,hash,value,true);
+        return segmentFor(hash).put(key, hash, value, true);
     }
 
     public V remove(Object key) {
@@ -297,12 +301,12 @@ public class LocalCache<K, V> {
     }
 
     public V getOrLoad(K key) throws Exception {
-        return get(key,defaultLoader);
+        return get(key, defaultLoader);
     }
 
     public void refresh(K key) {
         int hash = hash(checkNotNull(key));
-        segmentFor(hash).refresh(key,hash,defaultLoader,false);
+        segmentFor(hash).refresh(key, hash, defaultLoader, false);
     }
 
 
@@ -336,12 +340,12 @@ public class LocalCache<K, V> {
                 int initialCapacity) {
             this.map = map;
             initTable(newEntryArray(initialCapacity));
-            accessQueue = map.useAccessQueue()?
-                    new ConcurrentLinkedQueue<>(): LocalCache.discardingQueue();
+            accessQueue = map.useAccessQueue() ?
+                    new ConcurrentLinkedQueue<>() : LocalCache.discardingQueue();
 
-            writeQueue = map.useWriteQueue()?
-                    new ConcurrentLinkedQueue<>():LocalCache.discardingQueue();
-            recencyQueue = map.useAccessQueue()?new AccessQueue<>():LocalCache.discardingQueue();
+            writeQueue = map.useWriteQueue() ?
+                    new ConcurrentLinkedQueue<>() : LocalCache.discardingQueue();
+            recencyQueue = map.useAccessQueue() ? new AccessQueue<>() : LocalCache.discardingQueue();
             this.statsCounter = new AbstractCache.SimpleStatsCounter();
         }
 
@@ -355,6 +359,10 @@ public class LocalCache<K, V> {
         }
 
 
+        /**
+         * 读到live entry,如果返回null则直接返回
+         * 拿到entry的value,如果非null，则记录下该次读取，然后根据defaultLoader重新加载该cache
+         */
         V get(Object key, int hash) {
             try {
                 if (count != 0) {
@@ -366,7 +374,7 @@ public class LocalCache<K, V> {
                     V value = e.getValueReference().get();
                     if (value != null) {
                         recordRead(e, now);
-                        return scheduleRefresh(e,e.getKey(),hash,value,now,map.defaultLoader);
+                        return scheduleRefresh(e, e.getKey(), hash, value, now, map.defaultLoader);
                     }
                 }
                 return null;
@@ -391,8 +399,8 @@ public class LocalCache<K, V> {
                             return scheduleRefresh(e, key, hash, value, now, loader);
                         }
                         ValueReference<K, V> valueReference = e.getValueReference();
-                        if(valueReference.isLoading()){
-                            return waitForLoadingValue(e,key,valueReference);
+                        if (valueReference.isLoading()) {
+                            return waitForLoadingValue(e, key, valueReference);
                         }
                     }
                 }
@@ -400,39 +408,41 @@ public class LocalCache<K, V> {
                 // 这里有可能创建新的value，所以要加锁
                 // 但是也可能别的线程已经创建好了或者在创建中，所以可以get返回
                 // 也就是说锁住的是进入的过程，loading的过程是不锁的
-                return lockedGetOrLoad(key,hash,loader);
+                return lockedGetOrLoad(key, hash, loader);
             } finally {
                 postReadCleanup();
             }
         }
 
-        private V lockedGetOrLoad(K key, int hash, CacheLoader<? super K,V> loader) throws Exception {
-            ReferenceEntry<K,V> e;
-            ValueReference<K,V> valueReference = null;
-            LoadingValueReference<K,V> loadingValueReference = null;
-            boolean createNewEntry =true;
+        private V lockedGetOrLoad(K key, int hash, CacheLoader<? super K, V> loader) throws Exception {
+            ReferenceEntry<K, V> e;
+            ValueReference<K, V> valueReference = null;
+            LoadingValueReference<K, V> loadingValueReference = null;
+            boolean createNewEntry = true;
             lock();
             try {
                 long now = map.ticker.read();
                 preWriteCleanup(now);
-                int newCount = this.count-1;
-                AtomicReferenceArray<ReferenceEntry<K,V>> table = this.table;
-                int index = hash & (table.length()-1);
-                ReferenceEntry<K,V> first = table.get(index);
-                for (e = first;e!=null;e = e.getNext()){
+
+                int newCount = this.count - 1;
+                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+                int index = hash & (table.length() - 1);
+                ReferenceEntry<K, V> first = table.get(index);
+
+                for (e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
-                    if(equalsKey(key,entryKey)){
+                    if (e.getHash()==hash && equalsKey(key, entryKey)) {
                         valueReference = e.getValueReference();
-                        if(valueReference.isLoading()){   //正在加载
+                        if (valueReference.isLoading()) {   //正在加载
                             createNewEntry = false;
-                        }else {
+                        } else {
                             V value = valueReference.get();
-                            if(value==null){              //value的值为空
-                                enqueueNotification();
-                            }else if(map.isExpired(e,now)){  //或者过期了
-                                enqueueNotification();
-                            }else {
-                                recordLockedRead(e,now);    //value有值，并且没有过期，是一次成功的get
+                            if (value == null) {              //value的值为空
+                                enqueueNotification(entryKey, null,RemovalCause.COLLECTED);
+                            } else if (map.isExpired(e, now)) {  //或者过期了
+                                enqueueNotification(entryKey,value,RemovalCause.EXPIRED);
+                            } else {
+                                recordLockedRead(e, now);    //value有值，并且没有过期，是一次成功的get
                                 statsCounter.recordHits(1);
                                 return value;
                             }
@@ -446,14 +456,14 @@ public class LocalCache<K, V> {
                 }
                 //并没有找到cache，value为空，或者正在加载，或者过期了
                 //如果value不是正在加载，则需要设置新的entry，将valueReference设置为loading
-                if(createNewEntry){
+                if (createNewEntry) {
                     loadingValueReference = new LoadingValueReference<>();
                     //如果在链表的最后也没能找到，则创建一个新的entry
-                    if(e==null){
-                        e = newEntry(key,hash,first);
+                    if (e == null) {
+                        e = newEntry(key, hash, first);
                         e.setValueReference(loadingValueReference);
-                        table.set(index,e);
-                    }else {
+                        table.set(index, e);
+                    } else {
                         e.setValueReference(loadingValueReference);
                     }
                 }
@@ -465,52 +475,51 @@ public class LocalCache<K, V> {
                 postWriteCleanup();
             }
             //同步等待value创建完成
-            if(createNewEntry){
+            if (createNewEntry) {
                 try {
-                    synchronized (e){  //锁住entry,只允许自己修改entry
-                        return loadSync(key,hash,loadingValueReference,loader);
+                    synchronized (e) {  //锁住entry,只允许自己修改entry
+                        return loadSync(key, hash, loadingValueReference, loader);
                     }
-                }finally {
+                } finally {
                     statsCounter.recordMisses(1);
                 }
             }
             //该value正在加载中，直接等待就好
             else {
                 // The entry already exists. Wait for loading.
-                return waitForLoadingValue(e,key,valueReference);
+                return waitForLoadingValue(e, key, valueReference);
             }
         }
 
         private V loadSync(K key, int hash, LoadingValueReference<K, V> loadingValueReference, CacheLoader<? super K, V> loader) throws ExecutionException {
             ListenableFuture<V> loadFuture = loadingValueReference.loadFuture(key, loader);
-            return getAndRecordStats(key,hash,loadingValueReference,loadFuture);
+            return getAndRecordStats(key, hash, loadingValueReference, loadFuture);
         }
 
         @GuardedBy("this")
-        private void recordLockedRead(ReferenceEntry<K,V> e, long now) {
-            if(map.recordsAccess()){
+        private void recordLockedRead(ReferenceEntry<K, V> e, long now) {
+            if (map.recordsAccess()) {
                 e.setAccessTime(now);
             }
             accessQueue.add(e);
         }
 
 
-
-        private V waitForLoadingValue(ReferenceEntry<K,V> e, K key, ValueReference<K,V> valueReference) throws Exception {
-            if(!valueReference.isLoading()){
+        private V waitForLoadingValue(ReferenceEntry<K, V> e, K key, ValueReference<K, V> valueReference) throws Exception {
+            if (!valueReference.isLoading()) {
                 throw new AssertionError();
             }
             //别的线程正在加载该entry，本线程只需要等待就好
             checkState(!Thread.holdsLock(e));
             try {
                 V value = valueReference.waitForValue();
-                if(value==null){
+                if (value == null) {
                     throw new Exception("CacheLoader returned null for key " + key + ".");
                 }
                 long now = map.ticker.read();
-                recordRead(e,now);
+                recordRead(e, now);
                 return value;
-            }finally {
+            } finally {
                 statsCounter.recordMisses(1);
             }
         }
@@ -588,86 +597,58 @@ public class LocalCache<K, V> {
 
         private boolean storeLoadedValue(K key,
                                          int hash,
-                                         LoadingValueReference<K,V> oldValueReference,
+                                         LoadingValueReference<K, V> oldValueReference,
                                          V newValue) {
             lock();
             try {
                 long now = map.ticker.read();
                 preWriteCleanup(now);
-                int newCount = this.count+1;
-                if(newCount>this.threshold){
+                int newCount = this.count + 1;
+                if (newCount > this.threshold) {
                     expand();
-                    newCount = this.count+1;
+                    newCount = this.count + 1;
                 }
-                AtomicReferenceArray<ReferenceEntry<K,V>> table = this.table;
-                int index = hash & (table.length()-1);
-                ReferenceEntry<K,V> first = table.get(index);
-                for (ReferenceEntry<K,V> e = first;e!=null;e = e.getNext()){
+                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+                int index = hash & (table.length() - 1);
+                ReferenceEntry<K, V> first = table.get(index);
+                for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
-                    if(equalsKey(key,entryKey)){
-                        ValueReference<K,V> valueReference = e.getValueReference();
+                    if (e.getHash() == hash && equalsKey(key, entryKey)) {
+                        ValueReference<K, V> valueReference = e.getValueReference();
                         V entryValue = valueReference.get();
-                        if(oldValueReference==valueReference || (
-                                entryValue==null && valueReference!= Unset.unset())){
+                        if (oldValueReference == valueReference || (
+                                entryValue == null && valueReference != Unset.unset())) {
                             modCount++;
-                            if(oldValueReference.isActive()){
+                            if (oldValueReference.isActive()) {
                                 RemovalCause cause =
                                         (entryValue == null) ? RemovalCause.COLLECTED : RemovalCause.REPLACED;
-                                enqueueNotification();
+                                enqueueNotification(key,entryValue,cause);
                                 newCount--;
                             }
-                            setValue(e,key,newValue,now);
+                            setValue(e, key, newValue, now);
                             this.count = newCount;
+                            evictEntries(e);
                             return true;
                         }
                         // the loaded value was already clobbered
-                        enqueueNotification();
+                        enqueueNotification(key,newValue,RemovalCause.REPLACED);
                         return false;
                     }
                 }
 
                 modCount++;
-                ReferenceEntry<K,V> newEntry = newEntry(key,hash,first);
-                setValue(newEntry,key,newValue,now);
-                table.set(index,newEntry);
+                ReferenceEntry<K, V> newEntry = newEntry(key, hash, first);
+                setValue(newEntry, key, newValue, now);
+                table.set(index, newEntry);
                 this.count = newCount;
+                evictEntries(newEntry);
                 return true;
-            }finally {
+            } finally {
                 unlock();
                 postWriteCleanup();
             }
         }
 
-        private boolean removeLoadingValue(K key, int hash, LoadingValueReference<K, V> loadingValueReference) {
-            lock();
-            try {
-                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
-                int index = hash & (table.length() - 1);
-                ReferenceEntry<K, V> first = table.get(index);
-
-                for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
-                    K entry = e.getKey();
-                    if(equalsKey(key,entry)){
-                        ValueReference<K,V> v = e.getValueReference();
-                        if(v==loadingValueReference){
-                            if(loadingValueReference.isActive()){
-                                e.setValueReference(loadingValueReference.oldValue);
-                            }else {
-                                ReferenceEntry<K,V> newFirst = removeEntryFromChain(first,e);
-                                table.set(index,newFirst);
-                            }
-                            return true;
-                        }else {
-                            return false;
-                        }
-                    }
-                }
-                return false;
-            }finally {
-                unlock();
-                postWriteCleanup();
-            }
-        }
 
         /**
          * 返回一个新的loadingValueReference, 或者null，如果这个reference已经在loading或者刷新间隔太短
@@ -705,6 +686,218 @@ public class LocalCache<K, V> {
                 unlock();
                 postWriteCleanup();
             }
+        }
+
+
+        private boolean removeLoadingValue(K key, int hash, LoadingValueReference<K, V> loadingValueReference) {
+            lock();
+            try {
+                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+                int index = hash & (table.length() - 1);
+                ReferenceEntry<K, V> first = table.get(index);
+
+                for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
+                    K entry = e.getKey();
+                    if (equalsKey(key, entry)) {
+                        ValueReference<K, V> v = e.getValueReference();
+                        if (v == loadingValueReference) {
+                            if (loadingValueReference.isActive()) {
+                                e.setValueReference(loadingValueReference.oldValue);
+                            } else {
+                                ReferenceEntry<K, V> newFirst = removeEntryFromChain(first, e);
+                                table.set(index, newFirst);
+                            }
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+                return false;
+            } finally {
+                unlock();
+                postWriteCleanup();
+            }
+        }
+
+        /**
+         * 首先找到这个entry
+         * 如果entry非空，则设置cause为explicit，即用户自行删除
+         * 否则，如果isActive为true，则说明不是一个loading状态的entry，被垃圾收集来，设置cause为collected
+         * 其他情况直接return
+         * modCount自增
+         * count自减
+         * 删除该value
+         */
+        public V remove(Object key, int hash) {
+            lock();
+            try {
+
+                long now = map.ticker.read();
+                preWriteCleanup(now);
+
+                int newCount = this.count - 1;
+                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+                int index = hash & (table.length() - 1);
+                ReferenceEntry<K, V> first = table.get(index);
+
+                for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
+                    K entryKey = e.getKey();
+                    if (e.getHash() == hash && equalsKey(key, entryKey)) {
+                        ValueReference<K, V> valueReference = e.getValueReference();
+                        V entryValue = valueReference.get();
+                        RemovalCause cause;
+                        if (entryValue != null) {
+                            cause = RemovalCause.EXPLICIT;
+                        } else if (valueReference.isActive()) {  //entryValue==null
+                            cause = RemovalCause.COLLECTED;
+                        } else {
+                            //current loading
+                            return null;
+                        }
+                        modCount++;
+                        ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, entryValue, valueReference, cause);
+                        newCount = this.count - 1;
+                        table.set(index, newFirst);
+                        this.count = newCount;
+                        return entryValue;
+                    }
+                }
+                return null;
+            } finally {
+                unlock();
+                postWriteCleanup();
+            }
+        }
+
+
+        /**
+         * 首先找到该entry，使用的是地址比较
+         * 调用removeValueFromChain，拿到新的链头
+         * 设置新的count
+         * 返回ture如果找到了该entry
+         */
+        @GuardedBy("this")
+        private boolean removeEntry(ReferenceEntry<K, V> entry, int hash, RemovalCause cause) {
+            int newCount;
+            AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
+            int index = hash & (table.length() - 1);
+            ReferenceEntry<K, V> first = table.get(index);
+            for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
+                if (e == entry) {
+                    modCount++;
+                    ReferenceEntry<K, V> newFirst = removeValueFromChain(
+                            first,
+                            e,
+                            e.getKey(),
+                            e.getValueReference().get(),
+                            e.getValueReference(),
+                            cause
+                    );
+                    newCount = this.count - 1;
+                    table.set(index, newFirst);
+                    this.count = newCount;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * 将recency中的数据添加到access中
+         * 然后将writeQueue和accessQueue的内容过期部分清楚
+         * 考虑到所有的缓存是公用一份读超时或者写超时，所以队头的超时时间一定是长的
+         * todo 为每个缓存设计过期时间，为一组缓存设计过期时间
+         */
+        @GuardedBy("this")
+        private void expireEntries(long now) {
+            //将recency的缓存追加到queue中,这是一个锁方法
+            drainRecencyQueue();
+            ReferenceEntry<K, V> e;
+            while ((e = writeQueue.peek()) != null && map.isExpired(e, now)) {
+                if (!removeEntry(e, e.getHash(), RemovalCause.EXPIRED)) {
+                    throw new AssertionError();
+                }
+            }
+            while ((e = accessQueue.peek()) != null && map.isExpired(e, now)) {
+                if (!removeEntry(e, e.getHash(), RemovalCause.EXPIRED)) {
+                    throw new AssertionError();
+                }
+            }
+        }
+
+
+        /**
+         * 首先将remove通知消息入队
+         * 然后将entry从accessQueue和writeQueue中删除
+         * 如果valueReference正在加载，则直接返回
+         * 否则将entry从chain中删除
+         */
+        @GuardedBy("this")
+        private ReferenceEntry<K, V> removeValueFromChain(
+                ReferenceEntry<K, V> first,
+                ReferenceEntry<K, V> entry,
+                K key,
+                V value,
+                ValueReference<K, V> valueReference,
+                RemovalCause cause) {
+            enqueueNotification(key, value, cause);
+            writeQueue.remove(entry);
+            accessQueue.remove(entry);
+            if (valueReference.isLoading()) {
+                return first;
+            } else {
+                return removeEntryFromChain(first, entry);
+            }
+        }
+
+        /**
+         * 遍历链，不断根据当前节点和entry.next创建新的entry
+         * todo 这里是遍历了first和entry之间的节点，然后复制一份，可能会产生较大的损失
+         * todo 最新的数据在链头，最老的链尾，删除老数据会check整条链，从这个角度来看可能是合理的
+         */
+        private ReferenceEntry<K, V> removeEntryFromChain(ReferenceEntry<K, V> first,
+                                                          ReferenceEntry<K, V> entry) {
+            int newCount = count;
+            ReferenceEntry<K, V> newFirst = entry.getNext();
+            for (ReferenceEntry<K, V> e = first; e != entry; e = e.getNext()) {
+                ReferenceEntry<K, V> next = copyEntry(e, newFirst);
+                if (next != null) {
+                    newFirst = next;
+                } else {
+                    removeCollectedEntry(e);
+                    newCount--;
+                }
+            }
+            this.count = newCount;
+            return newFirst;
+        }
+
+        /**
+         * 通知，从writeQueue和accessQueue中删除e
+         */
+        @GuardedBy("this")
+        private void removeCollectedEntry(ReferenceEntry<K, V> e) {
+            enqueueNotification(e.getKey(), e.getValueReference().get(), RemovalCause.COLLECTED);
+            writeQueue.remove(e);
+            accessQueue.remove(e);
+        }
+
+        /**
+         * 首先recency是一个并发的容器，get后数据首先来到这里
+         * accessQueue是一个队列，在put的时候会加入元素，先入先出记录最老的缓存，过期的时候从头遍历进行清理
+         */
+        private void drainRecencyQueue() {
+            ReferenceEntry<K, V> e;
+            while ((e = recencyQueue.poll()) != null) {
+                if (accessQueue.contains(e)) {
+                    accessQueue.add(e);
+                }
+            }
+        }
+
+        private void drainReferenceQueues() {
+
         }
 
 
@@ -749,12 +942,12 @@ public class LocalCache<K, V> {
          * 过期entry, 清理referenceQueue，重设readCount
          */
         private void runLockedCleanup(long now) {
-            if(tryLock()){
+            if (tryLock()) {
                 try {
                     drainReferenceQueues();
                     expireEntries(now);
                     readCount.set(0);
-                }finally {
+                } finally {
                     unlock();
                 }
             }
@@ -763,97 +956,12 @@ public class LocalCache<K, V> {
         /**
          * 非锁方法：处理一下清理后的监听
          */
-        void runUnlockedCleanup(){
-            if(!isHeldByCurrentThread()){
+        void runUnlockedCleanup() {
+            if (!isHeldByCurrentThread()) {
                 map.processPendingNotifications();
             }
         }
 
-        @GuardedBy("this")
-        private void expireEntries(long now) {
-            //将recency的缓存追加到queue中,这是一个锁方法
-            drainRecencyQueue();
-            ReferenceEntry<K, V> e;
-            while ((e = writeQueue.peek()) != null && map.isExpired(e, now)) {
-                if (!removeEntry(e, e.getHash())) {
-                    throw new AssertionError();
-                }
-            }
-            while ((e = accessQueue.peek()) != null && map.isExpired(e, now)) {
-                if (!removeEntry(e, e.getHash())) {
-                    throw new AssertionError();
-                }
-            }
-        }
-
-        @GuardedBy("this")
-        private boolean removeEntry(ReferenceEntry<K, V> entry, int hash) {
-            int newCount = this.count - 1;
-            AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
-            int index = hash & (table.length() - 1);
-            ReferenceEntry<K, V> first = table.get(index);
-            for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
-                //todo 原code用的是地址相等
-                if (e.getKey().equals(entry.getKey())) {
-                    modCount++;
-                    ReferenceEntry<K, V> newFirst = removeValueFromChain(
-                            first,
-                            e,
-                            e.getKey(),
-                            hash,
-                            e.getValueReference().get(),
-                            e.getValueReference()
-                    );
-                    newCount = this.count - 1;
-                    table.set(index, newFirst);
-                    this.count = newCount;
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        @GuardedBy("this")
-        private ReferenceEntry<K, V> removeValueFromChain(
-                ReferenceEntry<K, V> first,
-                ReferenceEntry<K, V> entry,
-                K key,
-                int hash,
-                V Value,
-                ValueReference<K, V> valueReference) {
-            writeQueue.remove(entry);
-            accessQueue.remove(entry);
-            return removeEntryFromChain(first, entry);
-        }
-
-        private ReferenceEntry<K, V> removeEntryFromChain(ReferenceEntry<K, V> first,
-                                                          ReferenceEntry<K, V> entry) {
-            int newCount = count;
-            ReferenceEntry<K, V> newFirst = entry.getNext();
-            for (ReferenceEntry<K, V> e = first; e != entry; e = e.getNext()) {
-                ReferenceEntry<K, V> next = copyEntry(e, newFirst);
-                newFirst = next;
-            }
-            this.count = newCount;
-            return newFirst;
-        }
-
-        /**
-         * 首先recency是一个并发的容器，get后数据首先来到这里
-         * accessQueue是一个队列，在put的时候会加入元素，先入先出记录最老的缓存，过期的时候从头遍历进行清理
-         */
-        private void drainRecencyQueue() {
-            ReferenceEntry<K, V> e;
-            while ((e = recencyQueue.poll()) != null) {
-                if (accessQueue.contains(e)) {
-                    accessQueue.add(e);
-                }
-            }
-        }
-
-        private void drainReferenceQueues() {
-
-        }
 
         private void recordRead(ReferenceEntry<K, V> entry, long now) {
             if (map.recordsAccess()) {
@@ -922,7 +1030,7 @@ public class LocalCache<K, V> {
                     tryDrainReferenceQueues();
                     continue;
                 }
-                if (equalsKey(key,entryKey)) {
+                if (equalsKey(key, entryKey)) {
                     return e;
                 }
             }
@@ -934,7 +1042,7 @@ public class LocalCache<K, V> {
             return table.get(hash & (table.length() - 1));
         }
 
-        public V put(K key, int hash, V value,boolean onlyIfAbsent) {
+        public V put(K key, int hash, V value, boolean onlyIfAbsent) {
             lock();
             try {
 
@@ -953,29 +1061,29 @@ public class LocalCache<K, V> {
                 for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
                     K entryKey = e.getKey();
                     //find an existing value
-                    if (e.getHash() == hash && entryKey != null && entryKey.equals(key)) {
+                    if (e.getHash() == hash && equalsKey(key,entryKey)) {
                         ValueReference<K, V> valueReference = e.getValueReference();
                         V entryValue = valueReference.get();
-                        if(entryValue==null){
+                        if (entryValue == null) {
                             modCount++;
-                            if(valueReference.isActive()){
-                                enqueueNotification();
-                                setValue(e,key,value,now);
+                            if (valueReference.isActive()) {
+                                enqueueNotification(key, null,RemovalCause.COLLECTED);
+                                setValue(e, key, value, now);
                                 newCount = this.count;
-                            }else {
-                                setValue(e,key,value,now);
-                                newCount = this.count+1;
+                            } else {
+                                setValue(e, key, value, now);
+                                newCount = this.count + 1;
                             }
                             this.count = newCount;
                             evictEntries(e);
                             return null;
-                        }else if(onlyIfAbsent){
-                            recordLockedRead(e,now);
+                        } else if (onlyIfAbsent) {
+                            recordLockedRead(e, now);
                             return entryValue;
-                        }else {
+                        } else {
                             modCount++;
-                            enqueueNotification();
-                            setValue(e,key,value,now);
+                            enqueueNotification(key,entryValue,RemovalCause.REPLACED);
+                            setValue(e, key, value, now);
                             evictEntries(e);
                             return entryValue;
                         }
@@ -985,7 +1093,7 @@ public class LocalCache<K, V> {
                 ReferenceEntry<K, V> newEntry = newEntry(key, hash, first);
                 setValue(newEntry, key, value, now);
                 table.set(index, newEntry);
-                newCount = this.count+1;
+                newCount = this.count + 1;
                 this.count = newCount;
                 evictEntries(newEntry);
                 return null;
@@ -1048,8 +1156,14 @@ public class LocalCache<K, V> {
             this.count = newCount;
         }
 
+
+        private boolean equalsKey(Object key, K entryKey) {
+            return entryKey != null && map.keyEquivalence.equivalent(key, entryKey);
+        }
+
         /**
-         * 用强entry代替
+         * 如果key或者value被回收，则return null
+         * 否则copy一份
          */
         @GuardedBy("this")
         ReferenceEntry<K, V> copyEntry(ReferenceEntry<K, V> original, ReferenceEntry<K, V> newNext) {
@@ -1070,46 +1184,6 @@ public class LocalCache<K, V> {
             return newEntry;
         }
 
-        public V remove(Object key, int hash) {
-            lock();
-            try {
-                long now = map.ticker.read();
-                preWriteCleanup(now);
-                int newCount = this.count - 1;
-                AtomicReferenceArray<ReferenceEntry<K, V>> table = this.table;
-                int index = hash & (table.length() - 1);
-                ReferenceEntry<K, V> first = table.get(index);
-                for (ReferenceEntry<K, V> e = first; e != null; e = e.getNext()) {
-                    K entryKey = e.getKey();
-                    if (equalsKey(key, entryKey)) {
-                        ValueReference<K, V> valueReference = e.getValueReference();
-                        V entryValue = valueReference.get();
-                        if (entryValue != null) {
-                            modCount++;
-                            ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash, entryValue, valueReference);
-                            newCount = this.count - 1;
-                            table.set(index, newFirst);
-                            this.count = newCount;
-                            return entryValue;
-                        } else {
-                            return null;
-                        }
-                    }
-                }
-                return null;
-            } finally {
-                unlock();
-                postWriteCleanup();
-            }
-        }
-
-
-        private boolean equalsKey(Object key, K entryKey) {
-            return key.equals(entryKey);
-        }
-
-
-
 
         public V replace(K key, int hash, V newValue) {
             lock();
@@ -1127,14 +1201,17 @@ public class LocalCache<K, V> {
                         if (entryValue == null) {
                             int newCount = this.count - 1;
                             modCount++;
-                            ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, hash, entryValue, valueReference);
+                            ReferenceEntry<K, V> newFirst = removeValueFromChain(first, e, entryKey, null, valueReference
+                            ,RemovalCause.COLLECTED);
                             newCount = this.count - 1;
                             table.set(index, newFirst);
                             this.count = newCount;
                             return null;
                         } else {
                             modCount++;
+                            enqueueNotification(key,entryValue,RemovalCause.REPLACED);
                             setValue(e, key, newValue, now);
+                            evictEntries(e);
                             return entryValue;
                         }
                     }
@@ -1178,7 +1255,7 @@ public class LocalCache<K, V> {
                         K key = e.getKey();
                         V value = e.getValueReference().get();
                         RemovalCause cause = (key == null || value == null) ? RemovalCause.COLLECTED : RemovalCause.EXPLICIT;
-                        enqueueNotification();
+                        enqueueNotification(key,value,cause);
                     }
                 }
                 for (int i = 0; i < table.length(); i++) {
@@ -1195,8 +1272,15 @@ public class LocalCache<K, V> {
             }
         }
 
-        private void enqueueNotification() {
-
+        @GuardedBy("this")
+        private void enqueueNotification(K key, V value, RemovalCause cause) {
+            if (cause.wasEvicted()) {
+                statsCounter.recordEviction();
+            }
+            if (map.removalNotificationQueue != DISCARDING_QUEUE) {
+                RemovalNotification<K, V> notification = RemovalNotification.create(key, value, cause);
+                map.removalNotificationQueue.offer(notification);
+            }
         }
     }
 
@@ -1204,7 +1288,7 @@ public class LocalCache<K, V> {
         return expiresAfterAccess();
     }
 
-    private boolean useWriteQueue(){
+    private boolean useWriteQueue() {
         return expiresAfterWrite();
     }
 
