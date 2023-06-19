@@ -72,7 +72,7 @@ public class LoadingValueReference<K,V> implements ValueReference<K,V> {
     }
 
 
-    public ListenableFuture<V> loadFuture(K key, CacheLoader<K,V> loader){
+    public ListenableFuture<V> loadFuture(K key, CacheLoader<? super K,V> loader){
         try {
             stopwatch.start();
             V previousValue = oldValue.get();

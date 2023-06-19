@@ -1,5 +1,7 @@
 package com.bsren.cache;
 
+import com.bsren.cache.listeners.RemovalListener;
+import com.bsren.cache.listeners.RemovalNotification;
 import com.google.common.base.*;
 import com.google.errorprone.annotations.CheckReturnValue;
 
@@ -42,6 +44,15 @@ public class CacheBuilder<K,V> {
                     });
     static final CacheStats EMPTY_STATS = new CacheStats(0, 0, 0, 0, 0, 0);
 
+
+    enum NullListener implements RemovalListener<Object, Object> {
+        INSTANCE;
+
+        @Override
+        public void onRemoval(RemovalNotification<Object, Object> notification) {}
+    }
+
+
     static final Supplier<AbstractCache.StatsCounter> CACHE_STATS_COUNTER =
             new Supplier<AbstractCache.StatsCounter>() {
                 @Override
@@ -79,6 +90,25 @@ public class CacheBuilder<K,V> {
     Ticker ticker;
 
     Supplier<? extends AbstractCache.StatsCounter> statsCounterSupplier = NULL_STATS_COUNTER;
+
+    RemovalListener<? super K, ? super V> removalListener;
+
+    public <K1 extends K, V1 extends V> CacheBuilder<K1, V1> removalListener(
+            RemovalListener<? super K1, ? super V1> listener) {
+        checkState(this.removalListener == null);
+
+        // safely limiting the kinds of caches this can produce
+        @SuppressWarnings("unchecked")
+        CacheBuilder<K1, V1> me = (CacheBuilder<K1, V1>) this;
+        me.removalListener = checkNotNull(listener);
+        return me;
+    }
+
+    <K1 extends K, V1 extends V> RemovalListener<K1, V1> getRemovalListener() {
+        return (RemovalListener<K1, V1>)
+                MoreObjects.firstNonNull(removalListener, CacheBuilder.NullListener.INSTANCE);
+    }
+
 
 
     public CacheBuilder() {}

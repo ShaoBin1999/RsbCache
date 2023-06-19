@@ -2,6 +2,8 @@ package com.bsren.cache;
 
 
 import com.bsren.cache.listeners.RemovalCause;
+import com.bsren.cache.listeners.RemovalListener;
+import com.bsren.cache.listeners.RemovalNotification;
 import com.bsren.cache.loading.Unset;
 import com.bsren.cache.queue.AccessQueue;
 import com.google.common.base.Equivalence;
@@ -14,6 +16,7 @@ import java.lang.ref.ReferenceQueue;
 import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,17 +52,18 @@ public class LocalCache<K, V> {
 
     long expireAfterWriteNanos;
 
-    CacheLoader<K, V> defaultLoader;
+    CacheLoader<? super K, V> defaultLoader;
 
     Equivalence<Object> keyEquivalence;
 
     /** Strategy for comparing values. */
     Equivalence<Object> valueEquivalence;
 
-    int segmentShift;
+    RemovalListener<K,V> removalListener;
 
-    public LocalCache(CacheBuilder<K, V> builder, Object o) {
-    }
+    Queue<RemovalNotification<K,V>> removalNotificationQueue;
+
+    int segmentShift;
 
 
     long getSize() {
@@ -126,12 +130,18 @@ public class LocalCache<K, V> {
         keyEquivalence = builder.getKeyEquivalence();
         valueEquivalence = builder.getValueEquivalence();
 
+        defaultLoader = loader;
+
         expireAfterAccessNanos = builder.getExpireAfterAccessNanos();
         expireAfterWriteNanos = builder.getExpireAfterWriteNanos();
         refreshNanos = builder.getRefreshNanos();
-
+        this.globalStatsCounter = new AbstractCache.SimpleStatsCounter();
         ticker = builder.getTicker(recordsTime());
         entryFactory = EntryFactory.getFactory(keyStrength, usesAccessEntries(), usesWriteEntries());
+
+        removalListener = builder.getRemovalListener();
+        removalNotificationQueue = (removalListener== CacheBuilder.NullListener.INSTANCE)?
+                LocalCache.discardingQueue():new ConcurrentLinkedDeque<>();
 
         int initialCapacity = builder.getInitialCapacity();
         int segmentShift = 0;
@@ -143,7 +153,7 @@ public class LocalCache<K, V> {
         this.segmentShift = 32 - segmentShift;
         segmentMask = segmentCount - 1;
         this.segments = newSegmentArray(segmentCount);
-        this.globalStatsCounter = new AbstractCache.SimpleStatsCounter();
+
         int segmentCapacity = initialCapacity / segmentCount;
         if (segmentCapacity * segmentCount < initialCapacity) {
             segmentCapacity++;
@@ -216,7 +226,7 @@ public class LocalCache<K, V> {
         return segmentFor(hash).get(key, hash);
     }
 
-    V get(K key, CacheLoader<K, V> cacheLoader) throws Exception {
+    V get(K key, CacheLoader<? super K, V> cacheLoader) throws Exception {
         int hash = hash(checkNotNull(key));
         return segmentFor(hash).get(key, hash, cacheLoader);
     }
@@ -365,7 +375,7 @@ public class LocalCache<K, V> {
             }
         }
 
-        V get(K key, int hash, CacheLoader<K, V> loader) throws Exception {
+        V get(K key, int hash, CacheLoader<? super K, V> loader) throws Exception {
             checkNotNull(key);
             checkNotNull(loader);
             try {
@@ -396,7 +406,7 @@ public class LocalCache<K, V> {
             }
         }
 
-        private V lockedGetOrLoad(K key, int hash, CacheLoader<K,V> loader) throws Exception {
+        private V lockedGetOrLoad(K key, int hash, CacheLoader<? super K,V> loader) throws Exception {
             ReferenceEntry<K,V> e;
             ValueReference<K,V> valueReference = null;
             LoadingValueReference<K,V> loadingValueReference = null;
@@ -471,7 +481,7 @@ public class LocalCache<K, V> {
             }
         }
 
-        private V loadSync(K key, int hash, LoadingValueReference<K, V> loadingValueReference, CacheLoader<K, V> loader) throws ExecutionException {
+        private V loadSync(K key, int hash, LoadingValueReference<K, V> loadingValueReference, CacheLoader<? super K, V> loader) throws ExecutionException {
             ListenableFuture<V> loadFuture = loadingValueReference.loadFuture(key, loader);
             return getAndRecordStats(key,hash,loadingValueReference,loadFuture);
         }
@@ -483,6 +493,8 @@ public class LocalCache<K, V> {
             }
             accessQueue.add(e);
         }
+
+
 
         private V waitForLoadingValue(ReferenceEntry<K,V> e, K key, ValueReference<K,V> valueReference) throws Exception {
             if(!valueReference.isLoading()){
@@ -503,7 +515,7 @@ public class LocalCache<K, V> {
             }
         }
 
-        private V scheduleRefresh(ReferenceEntry<K, V> entry, K key, int hash, V oldValue, long now, CacheLoader<K, V> loader) {
+        private V scheduleRefresh(ReferenceEntry<K, V> entry, K key, int hash, V oldValue, long now, CacheLoader<? super K, V> loader) {
             if (map.refreshes() && (now - entry.getWriteTime() > map.refreshNanos)) {
                 V newValue = refresh(key, hash, loader, true);
                 if (newValue != null) {
@@ -517,7 +529,7 @@ public class LocalCache<K, V> {
          * 刷新value，除非另一个线程也在刷新。
          * 返回刷新后的值，或者空，如果另一个线程也在刷新或者异常发生
          */
-        private V refresh(K key, int hash, CacheLoader<K, V> loader, boolean checkTime) {
+        private V refresh(K key, int hash, CacheLoader<? super K, V> loader, boolean checkTime) {
             LoadingValueReference<K, V> loadingValueReference =
                     insertLoadingReference(key, hash, checkTime);
             if (loadingValueReference == null) {
@@ -535,7 +547,7 @@ public class LocalCache<K, V> {
 
         private ListenableFuture<V> loadAsync(K key, int hash,
                                               LoadingValueReference<K, V> loadingValueReference,
-                                              CacheLoader<K, V> cacheLoader) {
+                                              CacheLoader<? super K, V> cacheLoader) {
             ListenableFuture<V> loadingFuture = loadingValueReference.loadFuture(key, cacheLoader);
             loadingFuture.addListener(new Runnable() {
                 @Override
@@ -695,25 +707,65 @@ public class LocalCache<K, V> {
             }
         }
 
+
+        //---------------------------------post方法------------------------------
+
+        /**
+         * 在读次数达到阈值的时候cleanUp
+         */
         private void postReadCleanup() {
             if ((readCount.incrementAndGet() & map.DRAIN_THRESHOLD) == 0) {
                 cleanUp();
             }
         }
 
-        private void cleanUp() {
-            long now = map.ticker.read();
-            runCleanup(now);
+        /**
+         * 非锁方法，处理一下listeners
+         */
+        private void postWriteCleanup() {
+            runUnlockedCleanup();
         }
 
-        private void runCleanup(long now) {
-            if (tryLock()) {
+        /**
+         * 锁方法，过期entry, 清理referenceQueue，重设readCount
+         */
+        @GuardedBy("this")
+        private void preWriteCleanup(long now) {
+            runLockedCleanup(now);
+        }
+
+
+        /**
+         * 锁方法：过期entry, 清理referenceQueue，重设readCount
+         * 非锁方法：处理一下清理后的监听
+         */
+        private void cleanUp() {
+            long now = map.ticker.read();
+            runLockedCleanup(now);
+            runUnlockedCleanup();
+        }
+
+        /**
+         * 过期entry, 清理referenceQueue，重设readCount
+         */
+        private void runLockedCleanup(long now) {
+            if(tryLock()){
                 try {
+                    drainReferenceQueues();
                     expireEntries(now);
                     readCount.set(0);
-                } finally {
+                }finally {
                     unlock();
                 }
+            }
+        }
+
+        /**
+         * 非锁方法：处理一下清理后的监听
+         */
+        void runUnlockedCleanup(){
+            if(!isHeldByCurrentThread()){
+                map.processPendingNotifications();
             }
         }
 
@@ -948,9 +1000,6 @@ public class LocalCache<K, V> {
             drainRecencyQueue();
         }
 
-        private void postWriteCleanup() {
-
-        }
 
         ReferenceEntry<K, V> newEntry(K key, int hash, ReferenceEntry<K, V> next) {
             return map.entryFactory.newEntry(this, checkNotNull(key), hash, next);
@@ -1059,22 +1108,8 @@ public class LocalCache<K, V> {
             return key.equals(entryKey);
         }
 
-        @GuardedBy("this")
-        private void preWriteCleanup(long now) {
-            runLockedCleanup(now);
-        }
 
-        private void runLockedCleanup(long now) {
-            if(tryLock()){
-                try {
-                    drainReferenceQueues();
-                    expireEntries(now);
-                    readCount.set(0);
-                }finally {
-                    unlock();
-                }
-            }
-        }
+
 
         public V replace(K key, int hash, V newValue) {
             lock();
@@ -1303,5 +1338,21 @@ public class LocalCache<K, V> {
 
     static <E> Queue<E> discardingQueue() {
         return (Queue) DISCARDING_QUEUE;
+    }
+
+
+    /**
+     * 通知监听者entry已经被removed，因为过期、驱逐或者垃圾回收
+     * 是一个异步方法，一定会在expireEntry和evictEntry后被调用
+     */
+    void processPendingNotifications() {
+        RemovalNotification<K, V> notification;
+        while ((notification = removalNotificationQueue.poll()) != null) {
+            try {
+                removalListener.onRemoval(notification);
+            } catch (Throwable e) {
+                logger.log(Level.WARNING, "Exception thrown by removal listener", e);
+            }
+        }
     }
 }
