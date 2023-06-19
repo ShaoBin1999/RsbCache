@@ -6,6 +6,7 @@ import com.bsren.cache.listeners.RemovalListener;
 import com.bsren.cache.listeners.RemovalNotification;
 import com.bsren.cache.loading.Unset;
 import com.bsren.cache.queue.AccessQueue;
+import com.bsren.cache.queue.WriteQueue;
 import com.google.common.base.Equivalence;
 import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableSet;
@@ -341,11 +342,11 @@ public class LocalCache<K, V> {
             this.map = map;
             initTable(newEntryArray(initialCapacity));
             accessQueue = map.useAccessQueue() ?
-                    new ConcurrentLinkedQueue<>() : LocalCache.discardingQueue();
+                    new AccessQueue<>(): LocalCache.discardingQueue();
 
             writeQueue = map.useWriteQueue() ?
-                    new ConcurrentLinkedQueue<>() : LocalCache.discardingQueue();
-            recencyQueue = map.useAccessQueue() ? new AccessQueue<>() : LocalCache.discardingQueue();
+                    new WriteQueue<>() : LocalCache.discardingQueue();
+            recencyQueue = map.useAccessQueue() ? new ConcurrentLinkedDeque<>(): LocalCache.discardingQueue();
             this.statsCounter = new AbstractCache.SimpleStatsCounter();
         }
 
@@ -1223,10 +1224,12 @@ public class LocalCache<K, V> {
             }
         }
 
-        private void setValue(ReferenceEntry<K, V> e, K key, V newValue, long now) {
-            ValueReference<K, V> valueReference = new StrongValueReference<>(newValue);
-            e.setValueReference(valueReference);
-            recordWrite(e, now);
+        private void setValue(ReferenceEntry<K, V> entry, K key, V newValue, long now) {
+
+            ValueReference<K, V> valueReference =
+                    map.valueStrength.referenceValue(this, entry, newValue, 1);
+            entry.setValueReference(valueReference);
+            recordWrite(entry,now);
         }
 
         private void recordWrite(ReferenceEntry<K, V> e, long now) {
