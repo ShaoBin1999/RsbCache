@@ -19,7 +19,6 @@ import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -42,20 +41,51 @@ import static com.google.common.util.concurrent.Uninterruptibles.getUninterrupti
  */
 public class LocalCache<K, V> {
 
+    //最大容量
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
+    /**
+     * 读-清洗的阈值
+     */
+    final int DRAIN_THRESHOLD = 0x3F;
+
+
+    //每个segment是一个hashMap
     Segment<K, V>[] segments;
 
+    /**
+     * segments.length-1
+     */
     int segmentMask;
 
-    long expireAfterAccessNanos;
+    /**
+     * index for segment，防止在同一个segment里的entry也落在同一个index中
+     */
+    int segmentShift;
 
+    /**
+     * 统计
+     */
     AbstractCache.StatsCounter globalStatsCounter;
 
+    /**
+     * 公用的超时读时间
+     */
+    long expireAfterAccessNanos;
+
+    /**
+     * 公用的超时写时间
+     */
     long expireAfterWriteNanos;
 
+    /**
+     * default cache loader
+     */
     CacheLoader<? super K, V> defaultLoader;
 
+    /**
+     * Strategy for comparing keys
+     */
     Equivalence<Object> keyEquivalence;
 
     /**
@@ -63,13 +93,47 @@ public class LocalCache<K, V> {
      */
     Equivalence<Object> valueEquivalence;
 
+    /**
+     * 公共的删除监听器
+     */
     RemovalListener<K, V> removalListener;
 
+    /**
+     * 监听队列
+     */
     Queue<RemovalNotification<K, V>> removalNotificationQueue;
 
-    int segmentShift;
+    /**
+     * 公共的刷新时间
+     */
+    long refreshNanos;
 
+    /**
+     * 根据key和value来计算entry的权重
+     */
     Weigher<K,V> weigher;
+
+
+    /**
+     * 计时器
+     */
+    Ticker ticker;
+
+    /**
+     * Strategy for referencing keys
+     */
+    Strength keyStrength;
+
+    /**
+     * Strategy for referencing values.
+     */
+    Strength valueStrength;
+
+
+    /**
+     * entry工厂
+     */
+    EntryFactory entryFactory;
 
 
     long getSize() {
@@ -93,9 +157,6 @@ public class LocalCache<K, V> {
         this.expireAfterWriteNanos = expireAfterWriteNanos;
     }
 
-    final int DRAIN_THRESHOLD = 0x3F;
-
-    long refreshNanos;
 
     boolean expiresAfterWrite() {
         return expireAfterWriteNanos > 0;
@@ -117,21 +178,12 @@ public class LocalCache<K, V> {
         this.refreshNanos = refreshNanos;
     }
 
-    Ticker ticker;
-
-    Strength keyStrength;
-
-    /**
-     * Strategy for referencing values.
-     */
-    Strength valueStrength;
 
     LocalCache(int initialCapacity, int segmentCount, CacheLoader<K, V> cacheLoader) {
         this(initialCapacity, segmentCount);
         this.defaultLoader = cacheLoader;
     }
 
-    EntryFactory entryFactory;
 
     public LocalCache(
             CacheBuilder<? super K, ? super V> builder,
