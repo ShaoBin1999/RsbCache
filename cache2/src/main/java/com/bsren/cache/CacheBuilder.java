@@ -18,6 +18,8 @@ public class CacheBuilder<K,V> {
 
     private static final int DEFAULT_REFRESH_NANOS = 0;
 
+    public static final int UNSET_INT = -1;
+
     static final Supplier<? extends AbstractCache.StatsCounter> NULL_STATS_COUNTER =
             Suppliers.ofInstance(
                     new AbstractCache.StatsCounter() {
@@ -101,8 +103,6 @@ public class CacheBuilder<K,V> {
                     return 0;
                 }
             };
-
-    static final int UNSET_INT = -1;
 
     int initialCapacity = UNSET_INT;
     long maximumSize = UNSET_INT;
