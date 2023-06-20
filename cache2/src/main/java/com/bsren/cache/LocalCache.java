@@ -444,13 +444,14 @@ public class LocalCache<K, V> {
 
         @GuardedBy("this")
         private void setValue(ReferenceEntry<K, V> entry, K key, V newValue, long now) {
+            ValueReference<K, V> previous = entry.getValueReference();
             int weight = map.weigher.weigh(key, newValue);
             checkState(weight >= 0, "Weights must be non-negative");
             ValueReference<K, V> valueReference =
                     map.valueStrength.referenceValue(this, entry, newValue, 1);
             entry.setValueReference(valueReference);
             recordWrite(entry, weight, now);
-
+            previous.notifyNewValue(newValue);
         }
 
 
@@ -1290,6 +1291,7 @@ public class LocalCache<K, V> {
             writeQueue.remove(entry);
             accessQueue.remove(entry);
             if (valueReference.isLoading()) {
+                valueReference.notifyNewValue(null);
                 return first;
             } else {
                 return removeEntryFromChain(first, entry);

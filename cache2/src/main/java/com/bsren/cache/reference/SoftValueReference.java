@@ -3,6 +3,7 @@ package com.bsren.cache.reference;
 
 import com.bsren.cache.ReferenceEntry;
 import com.bsren.cache.ValueReference;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.SoftReference;
@@ -45,5 +46,10 @@ public class SoftValueReference<K, V> extends SoftReference<V> implements ValueR
     @Override
     public int getWeight() {
         return 1;
+    }
+
+    @Override
+    public void notifyNewValue(@Nullable V newValue) {
+
     }
 }

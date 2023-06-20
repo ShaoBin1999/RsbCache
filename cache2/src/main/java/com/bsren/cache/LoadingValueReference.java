@@ -11,6 +11,7 @@ import java.lang.ref.ReferenceQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static com.bsren.cache.loading.Unset.unset;
 import static com.google.common.util.concurrent.Futures.transform;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.Uninterruptibles.getUninterruptibly;
@@ -28,7 +29,7 @@ public class LoadingValueReference<K,V> implements ValueReference<K,V> {
     }
 
     public LoadingValueReference(ValueReference<K,V> oldValue){
-        this.oldValue = (oldValue==null)? Unset.unset():oldValue;
+        this.oldValue = (oldValue==null)? unset():oldValue;
     }
 
 
@@ -74,6 +75,18 @@ public class LoadingValueReference<K,V> implements ValueReference<K,V> {
     @Override
     public int getWeight() {
         return oldValue.getWeight();
+    }
+
+    @Override
+    public void notifyNewValue(@Nullable V newValue) {
+        if (newValue != null) {
+            // The pending load was clobbered by a manual write.
+            // Unblock all pending gets, and have them return the new value.
+            set(newValue);
+        } else {
+            // The pending load was removed. Delay notifications until loading completes.
+            oldValue = unset();
+        }
     }
 
 

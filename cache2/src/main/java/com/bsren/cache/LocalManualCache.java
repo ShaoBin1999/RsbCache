@@ -67,7 +67,7 @@ public class LocalManualCache<K, V> implements Cache<K, V>, Serializable {
 
     @Override
     public void cleanUp() {
-        localCache.clearUp();
+        localCache.cleanUp();
     }
 
     @Override

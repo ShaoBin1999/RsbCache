@@ -4,6 +4,7 @@ package com.bsren.cache.reference;
 
 import com.bsren.cache.ReferenceEntry;
 import com.bsren.cache.ValueReference;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.ref.ReferenceQueue;
 
@@ -48,5 +49,10 @@ public class StrongValueReference<K, V> implements ValueReference<K, V> {
     @Override
     public int getWeight() {
         return 1;
+    }
+
+    @Override
+    public void notifyNewValue(@Nullable V newValue) {
+
     }
 }

@@ -1,5 +1,7 @@
 package com.bsren.cache;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.lang.ref.ReferenceQueue;
 import java.util.concurrent.ExecutionException;
 
@@ -25,4 +27,6 @@ public interface ValueReference<K,V> {
     V waitForValue() throws ExecutionException;
 
     int getWeight();
+
+    void notifyNewValue(@Nullable V newValue);
 }
