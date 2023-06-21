@@ -42,4 +42,23 @@ public class CacheTest {
         Thread.sleep(10000);
         System.out.println(cache.getIfPresent("1"));
     }
+
+    @Test
+    public void testLoadAll(){
+        CacheBuilder<String,String> builder = new CacheBuilder<>();
+        Cache<String, String> cache = builder.expireAfterAccess(5, TimeUnit.SECONDS)
+                .expireAfterWrite(3, TimeUnit.SECONDS)
+                .removalListener(new RemovalListener<String, String>() {
+                    @Override
+                    public void onRemoval(RemovalNotification<String, String> notification) {
+                        System.out.println(notification.getKey()+" replaced");
+                    }
+                })
+                .initialCapacity(100).build(new CacheLoader<String, String>() {
+                    @Override
+                    public String load(String key) throws Exception {
+                        return "1" + key;
+                    }
+                });
+    }
 }

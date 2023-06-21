@@ -9,8 +9,12 @@ import com.bsren.cache.queue.AccessQueue;
 import com.bsren.cache.queue.WriteQueue;
 import com.bsren.cache.weigher.Weigher;
 import com.google.common.base.Equivalence;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.ExecutionError;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -20,11 +24,10 @@ import com.google.j2objc.annotations.Weak;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
-import java.util.AbstractQueue;
-import java.util.Iterator;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.ReentrantLock;
@@ -36,6 +39,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.Uninterruptibles.getUninterruptibly;
+import static java.util.Collections.unmodifiableSet;
 
 
 /**
@@ -1694,6 +1698,116 @@ public class LocalCache<K, V> {
 
     boolean equalsValue(Object v1, V v2) {
         return true;
+    }
+
+    ImmutableMap<K, V> getAll(Iterable<? extends K> keys) throws Exception {
+        int hits = 0;
+        int misses = 0;
+
+        Map<K, V> result = Maps.newLinkedHashMap();
+        Set<K> keysToLoad = Sets.newLinkedHashSet();
+        for (K key : keys) {
+            V value = get(key);
+            if (!result.containsKey(key)) {
+                result.put(key, value);
+                if (value == null) {
+                    misses++;
+                    keysToLoad.add(key);
+                } else {
+                    hits++;
+                }
+            }
+        }
+
+        try {
+            if (!keysToLoad.isEmpty()) {
+                try {
+                    Map<K, V> newEntries = loadAll(unmodifiableSet(keysToLoad), defaultLoader);
+                    for (K key : keysToLoad) {
+                        V value = newEntries.get(key);
+                        if (value == null) {
+                            throw new Exception("loadAll failed to return a value for " + key);
+                        }
+                        result.put(key, value);
+                    }
+                } catch (Exception e) {
+                    // loadAll not implemented, fallback to load
+                    for (K key : keysToLoad) {
+                        misses--; // get will count this miss
+                        result.put(key, get(key, defaultLoader));
+                    }
+                }
+            }
+            return ImmutableMap.copyOf(result);
+        } finally {
+            globalStatsCounter.recordHits(hits);
+            globalStatsCounter.recordMisses(misses);
+        }
+    }
+
+    Map<K,V> loadAll(Set<? extends K> keys,CacheLoader<? super K,V> loader) throws Exception{
+        checkNotNull(loader);
+        checkNotNull(keys);
+        Stopwatch stopwatch = Stopwatch.createStarted();
+        Map<K,V> result = null;
+        boolean success = false;
+        try {
+            Map<K,V> map = (Map<K, V>) loader.loadAll(keys);
+            result = map;
+            success = true;
+        }catch (Exception e){
+            if(e instanceof InterruptedException){
+                Thread.currentThread().interrupt();
+            }else {
+                throw new Exception(e);
+            }
+        }finally {
+            if(!success){
+                globalStatsCounter.recordLoadException(stopwatch.elapsed(TimeUnit.NANOSECONDS));
+            }
+        }
+        if(result==null){
+            globalStatsCounter.recordLoadException(stopwatch.elapsed(TimeUnit.NANOSECONDS));
+            throw new Exception();
+        }
+        stopwatch.stop();
+        boolean nullsPresent = false;
+        //todo batch by segment
+//        for (Map.Entry<K, V> entry : result.entrySet()) {
+//            K key = entry.getKey();
+//            V value = entry.getValue();
+//            if(key==null || value==null){
+//                nullsPresent = true;
+//            }else {
+//                put(key,value);
+//            }
+//        }
+        Map<Segment<K,V>,List<Map.Entry<K,V>>> indexMap = new HashMap<>();
+        for (Map.Entry<K, V> entry : result.entrySet()) {
+            if(entry.getKey()==null || entry.getValue()==null){
+                nullsPresent = true;
+            }else {
+                Segment<K, V> segment = segmentFor(hash(entry.getKey()));
+                List<Map.Entry<K, V>> entryList = indexMap.get(segment);
+                if(entryList==null){
+                    entryList = new ArrayList<>();
+                }
+                entryList.add(entry);
+            }
+        }
+        for (Map.Entry<Segment<K, V>, List<Map.Entry<K, V>>> segmentListEntry : indexMap.entrySet()) {
+            Segment<K, V> segment = segmentListEntry.getKey();
+            List<Map.Entry<K, V>> entries = segmentListEntry.getValue();
+            for (Map.Entry<K, V> entry : entries) {
+                segment.put(entry.getKey(),hash(entry.getKey()),entry.getValue(),false);
+            }
+        }
+
+        if(nullsPresent){
+            globalStatsCounter.recordLoadException(stopwatch.elapsed(TimeUnit.NANOSECONDS));
+            throw new Exception();
+        }
+        return result;
     }
 
 
