@@ -37,6 +37,8 @@ public class LocalCache<K, V> {
 
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
+    static final String val = "112";
+
     final Segment<K, V>[] segments;
 
     int segmentMask;
